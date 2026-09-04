@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ACTLog Browser Tracker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="logo-dot"></div>
+      <span class="brand-title">ACTLog</span>
+      <span class="version-tag">v0.0.1</span>
+    </div>
+    <div class="status-indicator">
+      <span class="status-dot online"></span>
+      <span class="status-text">Standalone</span>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="nav-tabs">
+    <button class="nav-tab active" id="tab-overview" data-view="view-overview">Overview</button>
+    <button class="nav-tab" id="tab-logs" data-view="view-logs">Full Logs (<span id="log-count-badge">0</span>)</button>
+  </nav>
+
+  <!-- Main Content Views -->
+  <main class="app-main">
+    <!-- View 1: Overview -->
+    <div class="view-panel" id="view-overview">
+      <!-- Active Tab Card -->
+      <section class="card current-card">
+        <div class="card-label">CURRENTLY BROWSING</div>
+        <div class="active-app-row">
+          <div class="app-icon-badge" id="current-badge">--</div>
+          <div class="active-meta">
+            <div class="app-name" id="current-domain">Detecting active tab...</div>
+            <div class="window-title" id="current-title">-</div>
+          </div>
+        </div>
+        <div class="live-ticker-row">
+          <span class="ticker-label">Active on this page:</span>
+          <span class="ticker-value" id="current-timer">00:00:00</span>
+        </div>
+      </section>
+
+      <!-- Today's Metrics -->
+      <section class="metrics-grid">
+        <div class="metric-box">
+          <span class="metric-label">Today's Browser Time</span>
+          <span class="metric-value" id="metric-today-time">0m</span>
+        </div>
+        <div class="metric-box">
+          <span class="metric-label">Domains Visited</span>
+          <span class="metric-value" id="metric-domain-count">0</span>
+        </div>
+        <div class="metric-box">
+          <span class="metric-label">Clean Sessions</span>
+          <span class="metric-value" id="metric-session-count">0</span>
+        </div>
+      </section>
+
+      <!-- Top Domains Breakdown -->
+      <section class="card section-card">
+        <div class="section-header">
+          <span class="section-title">Today's Domain Activity</span>
+        </div>
+        <div class="domain-list" id="domain-breakdown-list">
+          <div class="empty-state">No browsing activity recorded today</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- View 2: Full Logs -->
+    <div class="view-panel hidden" id="view-logs">
+      <!-- Search & Actions Bar -->
+      <div class="logs-toolbar">
+        <input type="text" id="log-search-input" class="search-input" placeholder="Search domain, title, or URL...">
+        <div class="toolbar-actions">
+          <button class="btn-action" id="btn-export-json" title="Download all logs as JSON">Export JSON</button>
+          <button class="btn-action btn-danger" id="btn-clear-logs" title="Clear all local logs">Clear</button>
+        </div>
+      </div>
+
+      <!-- Logs List -->
+      <div class="logs-container" id="logs-container">
+        <div class="empty-state">Loading activity logs...</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <span class="footer-note">100% Local in chrome.storage</span>
+    <span class="footer-storage" id="storage-status">Clean logs</span>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
