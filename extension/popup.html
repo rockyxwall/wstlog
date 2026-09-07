@@ -12,7 +12,7 @@
     <div class="brand">
       <div class="logo-dot"></div>
       <span class="brand-title">ACTLog</span>
-      <span class="brand-badge">v0.0.2</span>
+      <span class="brand-badge" id="app-version">--</span>
     </div>
     <!-- Date Switcher -->
     <div class="date-navigator">
@@ -102,15 +102,17 @@
 
     <!-- View 2: Categories & Drilldown -->
     <div class="view-panel hidden" id="view-categories">
-      <!-- Add Custom Category -->
+      <!-- Category Management with Chips -->
       <section class="card category-create-card">
         <div class="section-header">
-          <span class="section-title">Add Category (Free)</span>
+          <span class="section-title">Manage Categories</span>
+          <span class="section-subtext">Click ✕ to delete</span>
         </div>
         <div class="category-add-row">
-          <input type="text" id="input-new-cat" class="cat-input" placeholder="e.g. Finance, Games..." maxlength="20">
+          <input type="text" id="input-new-cat" class="cat-input" placeholder="New category name..." maxlength="20">
           <button class="btn-action" id="btn-add-cat">+ Add</button>
         </div>
+        <div class="category-chips-list" id="category-chips-list"></div>
       </section>
 
       <!-- Category Distribution Cards -->
@@ -123,13 +125,13 @@
         </div>
       </section>
 
-      <!-- Domain Breakdown Accordion with Category Assigner -->
+      <!-- Domain Breakdown with Decluttered Override -->
       <section class="card section-card">
         <div class="section-header">
-          <span class="section-title">Domain Drilldown & Override</span>
-          <span class="section-subtext">Click domain to view pages or assign category</span>
+          <span class="section-title">Domain Categorization</span>
+          <span class="section-subtext">Assign category per domain</span>
         </div>
-        <div class="drilldown-list" id="drilldown-domain-list">
+        <div class="domain-cards-list" id="drilldown-domain-list">
           <div class="empty-state">No domain logs available</div>
         </div>
       </section>

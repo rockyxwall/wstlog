@@ -15,7 +15,7 @@ const manifest = JSON.parse(manifestRaw);
 
 assert.equal(manifest.manifest_version, 3, 'Must be MV3');
 assert.ok(manifest.name, 'Must have name');
-assert.equal(manifest.version, '0.0.2', 'Must be v0.0.2');
+assert.match(manifest.version, /^\d+\.\d+\.\d+$/, 'Version must follow semver format');
 assert.ok(manifest.permissions.includes('tabs'), 'Must have tabs permission');
 assert.ok(manifest.permissions.includes('storage'), 'Must have storage permission');
 assert.ok(manifest.permissions.includes('idle'), 'Must have idle permission');
@@ -28,7 +28,7 @@ assert.ok(fs.existsSync(path.join('extension', manifest.action.default_popup)), 
 for (const [size, iconPath] of Object.entries(manifest.icons)) {
   assert.ok(fs.existsSync(path.join('extension', iconPath)), `Icon ${size} must exist`);
 }
-console.log('  PASS: manifest.json is valid (v0.0.2) and all assets exist');
+console.log(`  PASS: manifest.json is valid (v${manifest.version}) and all assets exist`);
 
 // 2. Digest Engine & Classifier Testing
 console.log('\n[2/3] Validating digest.js logic...');
@@ -58,11 +58,18 @@ assert.equal(
   'Work & Comms'
 );
 
+// Test deleted category fallback (if Development deleted, falls back to General)
+assert.equal(
+  context.classifyDomain('github.com', {}, ['Docs & Learning', 'General']),
+  'General',
+  'Deleted category must fall back cleanly'
+);
+
 // Test AI domain sort prompt
 const prompt = context.generateAISortPrompt(['news.ycombinator.com', 'internal.dev'], ['Development', 'General']);
 assert.ok(prompt.includes('news.ycombinator.com'), 'Prompt should include domain');
 assert.ok(prompt.includes('STRICT CONSTRAINTS'), 'Prompt should have strict constraints');
-console.log('  PASS: classifyDomain covers default, manual overrides, and AI sort prompt generation');
+console.log('  PASS: classifyDomain covers default, manual overrides, deleted categories, and AI sort prompt');
 
 // Test aggregation with cross-hour slicing
 const today = new Date();

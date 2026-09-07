@@ -1,18 +1,29 @@
-// ACTLog Standalone Activity Tracker — Popup Logic (v0.0.2)
-// Ponytail: pure vanilla JS, zero libraries, backward-compatible
+// ACTLog Standalone Activity Tracker — Popup Logic
+// Ponytail: pure vanilla JS, zero libraries, backward-compatible, decluttered UI
 
 let cachedSessions = [];
 let currentActive = null;
 let liveTicker = null;
 let selectedDateMs = getMidnight(new Date());
 
-let customCategories = [];
+let categories = [];
 let domainMappings = {};
 
 function getMidnight(d) {
   const date = new Date(d);
   date.setHours(0, 0, 0, 0);
   return date.getTime();
+}
+
+// Universal Version Loader
+function initVersion() {
+  const el = document.getElementById('app-version');
+  if (el) {
+    const v = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
+      ? chrome.runtime.getManifest().version
+      : '0.0.2';
+    el.textContent = `v${v}`;
+  }
 }
 
 // DOM Elements
@@ -43,6 +54,7 @@ const timelineContainer = document.getElementById('timeline-container');
 const overviewDomainList = document.getElementById('overview-domain-list');
 
 // Categories Elements
+const categoryChipsList = document.getElementById('category-chips-list');
 const categoryBarsList = document.getElementById('category-bars-list');
 const drilldownDomainList = document.getElementById('drilldown-domain-list');
 const inputNewCat = document.getElementById('input-new-cat');
@@ -94,10 +106,6 @@ function getDomainAbbr(domain) {
   if (!domain) return 'ID';
   const clean = domain.replace(/^www\./i, '');
   return clean.slice(0, 2).toUpperCase();
-}
-
-function getAllCategories() {
-  return [...DEFAULT_CATEGORIES, ...customCategories];
 }
 
 function updateDateLabel() {
@@ -155,13 +163,25 @@ async function loadData() {
   const store = await chrome.storage.local.get([
     'current_active',
     'sessions',
-    'custom_categories',
+    'categories',
     'domain_mappings'
   ]);
   cachedSessions = Array.isArray(store.sessions) ? store.sessions : [];
   currentActive = store.current_active || null;
-  customCategories = Array.isArray(store.custom_categories) ? store.custom_categories : [];
-  domainMappings = (typeof store.domain_mappings === 'object' && store.domain_mappings !== null) ? store.domain_mappings : {};
+
+  // Defaults CAN be deleted now; seeded on initial run only
+  if (Array.isArray(store.categories) && store.categories.length > 0) {
+    categories = store.categories;
+  } else if (!store.categories) {
+    categories = [...INITIAL_DEFAULT_CATEGORIES];
+    await chrome.storage.local.set({ categories });
+  } else {
+    categories = [];
+  }
+
+  domainMappings = (typeof store.domain_mappings === 'object' && store.domain_mappings !== null)
+    ? store.domain_mappings
+    : {};
 
   storageStatus.textContent = `${cachedSessions.length} total sessions`;
   renderAllViews();
@@ -186,10 +206,11 @@ function renderAllViews() {
     });
   }
 
-  // Aggregate day stats using custom domain mappings
-  const stats = aggregateDayStats(daySessions, selectedDateMs, domainMappings);
+  // Aggregate day stats using custom domain mappings & active categories
+  const stats = aggregateDayStats(daySessions, selectedDateMs, domainMappings, categories);
 
   renderOverview(stats);
+  renderCategoryChips();
   renderCategories(stats);
   renderAIDigest(stats);
   renderAISortPrompt(stats);
@@ -231,7 +252,7 @@ function renderOverview(stats) {
         topCat = cat;
       }
     }
-    const catColor = getCategoryColor(topCat, customCategories);
+    const catColor = getCategoryColor(topCat, categories);
     const tooltip = `${b.hour.toString().padStart(2, '0')}:00 — Active: ${formatDuration(b.activeMs)}, Idle: ${formatDuration(b.idleMs)} (${topCat})`;
 
     return `
@@ -252,7 +273,7 @@ function renderOverview(stats) {
     const top4 = stats.sortedDomains.slice(0, 4);
     overviewDomainList.innerHTML = top4.map(item => {
       const pct = stats.totalActiveMs > 0 ? Math.round((item.durationMs / stats.totalActiveMs) * 100) : 0;
-      const catColor = getCategoryColor(item.category, customCategories);
+      const catColor = getCategoryColor(item.category, categories);
       const safeDomain = escapeHtml(item.domain);
       const safeCat = escapeHtml(item.category);
       return `
@@ -275,8 +296,26 @@ function renderOverview(stats) {
   }
 }
 
+// Render Manageable Category Chips (All can be deleted via ✕)
+function renderCategoryChips() {
+  if (categories.length === 0) {
+    categoryChipsList.innerHTML = '<span class="text-muted" style="font-size:10px;">No categories defined. Add one above.</span>';
+    return;
+  }
+  categoryChipsList.innerHTML = categories.map(cat => {
+    const color = getCategoryColor(cat, categories);
+    const safeCat = escapeHtml(cat);
+    return `
+      <span class="cat-chip" style="border-color: ${color}40;">
+        <span class="cat-chip-name" style="color: ${color};">${safeCat}</span>
+        <span class="cat-chip-delete" data-category="${safeCat}" title="Delete category">✕</span>
+      </span>
+    `;
+  }).join('');
+}
+
 function renderCategories(stats) {
-  // Category Bars
+  // Category Distribution Bars
   const catEntries = Object.entries(stats.categories).sort((a, b) => b[1] - a[1]);
 
   if (catEntries.length === 0) {
@@ -284,7 +323,7 @@ function renderCategories(stats) {
   } else {
     categoryBarsList.innerHTML = catEntries.map(([name, ms]) => {
       const pct = stats.totalActiveMs > 0 ? Math.round((ms / stats.totalActiveMs) * 100) : 0;
-      const color = getCategoryColor(name, customCategories);
+      const color = getCategoryColor(name, categories);
       const safeName = escapeHtml(name);
       return `
         <div class="category-row">
@@ -300,39 +339,38 @@ function renderCategories(stats) {
     }).join('');
   }
 
-  // Domain Drilldown Accordion with Category Override Dropdowns
-  const allCats = getAllCategories();
-
+  // Decluttered Domain Cards with Clear Category Override Dropdown
   if (stats.sortedDomains.length === 0) {
     drilldownDomainList.innerHTML = '<div class="empty-state">No domain logs available</div>';
   } else {
-    drilldownDomainList.innerHTML = stats.sortedDomains.map(d => {
-      const catColor = getCategoryColor(d.category, customCategories);
+    drilldownDomainList.innerHTML = stats.sortedDomains.map((d, idx) => {
       const safeDomain = escapeHtml(d.domain);
-      const pagesHtml = d.pageTitles.length > 0
+      const pageCount = d.pageTitles.length;
+      const pagesHtml = pageCount > 0
         ? d.pageTitles.map(p => `<div class="page-title-entry" title="${escapeHtml(p)}">&bull; ${escapeHtml(p)}</div>`).join('')
         : '<div class="page-title-entry">&bull; Active page visits</div>';
 
-      const optionsHtml = allCats.map(cat => {
+      const optionsHtml = categories.map(cat => {
         const isSel = cat === d.category ? 'selected' : '';
         return `<option value="${escapeHtml(cat)}" ${isSel}>${escapeHtml(cat)}</option>`;
       }).join('');
 
       return `
-        <div class="drilldown-item">
-          <div class="drilldown-header">
-            <div class="drilldown-title-wrap">
-              <span class="caret-icon">&#9654;</span>
-              <span class="domain-item-name" title="${safeDomain}">${safeDomain}</span>
-            </div>
-            <div class="domain-actions-wrap">
-              <select class="domain-cat-select" data-domain="${safeDomain}" title="Assign category">
+        <div class="domain-card">
+          <div class="domain-card-main">
+            <span class="domain-title" title="${safeDomain}">${safeDomain}</span>
+            <span class="domain-duration">${formatDuration(d.durationMs)}</span>
+          </div>
+          <div class="domain-card-controls">
+            <div class="domain-select-wrap">
+              <span class="domain-control-label">Category:</span>
+              <select class="domain-cat-select" data-domain="${safeDomain}" title="Assign category to this domain">
                 ${optionsHtml}
               </select>
-              <span class="domain-item-time">${formatDuration(d.durationMs)}</span>
             </div>
+            ${pageCount > 0 ? `<button class="btn-pages-toggle" data-target="pages-box-${idx}">${pageCount} pages ▾</button>` : ''}
           </div>
-          <div class="drilldown-pages">
+          <div class="domain-pages-list hidden" id="pages-box-${idx}">
             ${pagesHtml}
           </div>
         </div>
@@ -341,22 +379,33 @@ function renderCategories(stats) {
   }
 }
 
-// Category creation listener for Free users
+// Category Creation (Add)
 btnAddCat.addEventListener('click', async () => {
   const val = inputNewCat.value.trim();
   if (!val) return;
-  const allCats = getAllCategories();
-  if (allCats.some(c => c.toLowerCase() === val.toLowerCase())) {
+  if (categories.some(c => c.toLowerCase() === val.toLowerCase())) {
     alert('Category already exists.');
     return;
   }
-  customCategories.push(val);
-  await chrome.storage.local.set({ custom_categories: customCategories });
+  categories.push(val);
+  await chrome.storage.local.set({ categories });
   inputNewCat.value = '';
   renderAllViews();
 });
 
-// Domain Category change delegation for Free users
+// Category Deletion (Any category can be deleted via ✕)
+categoryChipsList.addEventListener('click', async (e) => {
+  const deleteBtn = e.target.closest('.cat-chip-delete');
+  if (!deleteBtn) return;
+  const catToDelete = deleteBtn.dataset.category;
+  if (confirm(`Delete category "${catToDelete}"?`)) {
+    categories = categories.filter(c => c !== catToDelete);
+    await chrome.storage.local.set({ categories });
+    renderAllViews();
+  }
+});
+
+// Domain Category Override Dropdown
 drilldownDomainList.addEventListener('change', async (e) => {
   if (e.target.classList.contains('domain-cat-select')) {
     const domain = e.target.dataset.domain;
@@ -367,19 +416,24 @@ drilldownDomainList.addEventListener('change', async (e) => {
   }
 });
 
-// Drilldown accordion click delegation (ignore select dropdown clicks)
+// Domain Pages Toggle (Clean, isolated, non-colliding click)
 drilldownDomainList.addEventListener('click', (e) => {
-  if (e.target.tagName === 'SELECT' || e.target.tagName === 'OPTION') return;
-  const header = e.target.closest('.drilldown-header');
-  if (header && header.parentElement) {
-    header.parentElement.classList.toggle('open');
+  const toggleBtn = e.target.closest('.btn-pages-toggle');
+  if (!toggleBtn) return;
+  const targetId = toggleBtn.dataset.target;
+  const pagesBox = document.getElementById(targetId);
+  if (pagesBox) {
+    const isNowHidden = pagesBox.classList.toggle('hidden');
+    toggleBtn.textContent = isNowHidden
+      ? toggleBtn.textContent.replace('▴', '▾')
+      : toggleBtn.textContent.replace('▾', '▴');
   }
 });
 
 // Render Strict AI Auto-Sort Prompt for Paid/Pro Users
 function renderAISortPrompt(stats) {
   const visitedDomains = stats.sortedDomains.map(d => d.domain);
-  const prompt = generateAISortPrompt(visitedDomains, getAllCategories());
+  const prompt = generateAISortPrompt(visitedDomains, categories);
   aiSortPreview.textContent = prompt;
 }
 
@@ -460,6 +514,7 @@ btnClearLogs.addEventListener('click', async () => {
 
 // Initialization
 window.addEventListener('DOMContentLoaded', () => {
+  initVersion();
   updateDateLabel();
   loadData();
   liveTicker = setInterval(() => {

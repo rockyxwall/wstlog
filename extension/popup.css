@@ -517,69 +517,44 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 280px;
-  overflow-y: auto;
+/* Category Chips List */
+.category-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
 }
 
-.drilldown-item {
+.cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--bg-card);
-  overflow: hidden;
 }
 
-.drilldown-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 10px;
+.cat-chip-name {
+  color: var(--text-primary);
+}
+
+.cat-chip-delete {
   cursor: pointer;
-  transition: background 0.15s;
-}
-
-.drilldown-header:hover {
-  background: var(--bg-card-hover);
-}
-
-.drilldown-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.caret-icon {
-  font-size: 10px;
   color: var(--text-muted);
-  transition: transform 0.2s;
+  font-size: 9px;
+  line-height: 1;
+  transition: color 0.15s;
+  padding: 0 1px;
 }
 
-.drilldown-item.open .caret-icon {
-  transform: rotate(90deg);
+.cat-chip-delete:hover {
+  color: var(--status-danger);
 }
 
-.drilldown-pages {
-  display: none;
-  padding: 6px 12px 8px 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
-  background: rgba(0, 0, 0, 0.2);
-  flex-direction: column;
-  gap: 4px;
-}
-
-.drilldown-item.open .drilldown-pages {
-  display: flex;
-}
-
-.page-title-entry {
-  font-size: 10px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  list-style: circle;
-}
-
-/* Category Creator & Domain Select */
+/* Category Creator Input */
 .category-add-row {
   display: flex;
   gap: 8px;
@@ -601,27 +576,129 @@ body {
   border-color: var(--accent-light);
 }
 
-.domain-actions-wrap {
+/* Decluttered Domain Cards */
+.domain-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.domain-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-card);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.domain-card:hover {
+  background: var(--bg-card-hover);
+}
+
+.domain-card-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.domain-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+
+.domain-duration {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.domain-card-controls {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: 6px;
+}
+
+.domain-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.domain-control-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
 }
 
 .domain-cat-select {
   background: var(--bg-secondary);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
-  font-size: 9px;
-  padding: 2px 4px;
+  font-size: 10px;
+  padding: 2px 6px;
   outline: none;
   cursor: pointer;
-  max-width: 110px;
+  max-width: 140px;
 }
 
 .domain-cat-select:focus {
   border-color: var(--accent-light);
-  color: var(--text-primary);
+}
+
+.btn-pages-toggle {
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  color: var(--accent-light);
+  font-size: 9px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-pages-toggle:hover {
+  background: rgba(37, 99, 235, 0.2);
+}
+
+.domain-pages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  border-left: 2px solid var(--accent-light);
+}
+
+.domain-pages-list.hidden {
+  display: none;
+}
+
+.page-title-entry {
+  font-size: 9.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .btn-sm {

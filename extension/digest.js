@@ -1,7 +1,7 @@
-// ACTLog Standalone Activity Digest & Domain Classifier (v0.0.2)
-// Ponytail: pure native logic, zero dependencies, token-efficient AI digest generation
+// ACTLog Standalone Activity Digest & Domain Classifier
+// Ponytail: pure native logic, zero dependencies, dynamic category handling
 
-const DEFAULT_CATEGORIES = [
+const INITIAL_DEFAULT_CATEGORIES = [
   'Development',
   'Docs & Learning',
   'Work & Comms',
@@ -14,73 +14,77 @@ const DEFAULT_CATEGORIES = [
 const DOMAIN_CATEGORY_RULES = [
   {
     category: 'Development',
-    color: '#3b82f6', // blue
+    color: '#3b82f6',
     match: /(github|gitlab|bitbucket|stackoverflow|stackexchange|localhost|127\.0\.0\.1|npmjs|crates\.io|codepen|replit|vercel|supabase|firebase|aws\.amazon|cloud\.google|console\.azure)/i
   },
   {
     category: 'Docs & Learning',
-    color: '#8b5cf6', // purple
+    color: '#8b5cf6',
     match: /(docs\.rs|developer\.mozilla|rust-lang|wikipedia|medium|dev\.to|substack|coursera|udemy|edx|arxiv|w3schools|learn|tutorial)/i
   },
   {
     category: 'Work & Comms',
-    color: '#10b981', // green
+    color: '#10b981',
     match: /(slack|discord|notion|mail\.google|gmail|outlook|teams\.microsoft|zoom\.us|meet\.google|docs\.google|sheets\.google|linear\.app|atlassian|trello|asana|figma)/i
   },
   {
     category: 'Media & Streaming',
-    color: '#f59e0b', // amber
+    color: '#f59e0b',
     match: /(youtube|netflix|spotify|twitch|primevideo|soundcloud|vimeo|hulu|disneyplus)/i
   },
   {
     category: 'Social Media',
-    color: '#ec4899', // pink
+    color: '#ec4899',
     match: /(reddit|twitter|x\.com|facebook|instagram|linkedin|tiktok|threads\.net)/i
   },
   {
     category: 'AI & Search',
-    color: '#06b6d4', // cyan
+    color: '#06b6d4',
     match: /(google|bing|duckduckgo|kagi|chatgpt|openai|claude\.ai|gemini\.google|perplexity\.ai)/i
   }
 ];
 
-const CUSTOM_COLORS = ['#f43f5e', '#6366f1', '#14b8a6', '#f97316', '#a855f7', '#0284c7'];
+const DYNAMIC_PALETTE = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#f43f5e', '#6366f1', '#14b8a6', '#f97316', '#a855f7'];
 
-function classifyDomain(domain, domainMappings = {}) {
+function classifyDomain(domain, domainMappings = {}, activeCategories = null) {
   if (!domain || domain === 'Internal' || domain === 'Idle / Away') return 'Other';
 
+  const isAllowed = (cat) => !activeCategories || activeCategories.includes(cat);
+
   // 1. Manual user override takes precedence
-  if (domainMappings && domainMappings[domain]) {
+  if (domainMappings && domainMappings[domain] && isAllowed(domainMappings[domain])) {
     return domainMappings[domain];
   }
 
-  // 2. Built-in regex rule
+  // 2. Built-in regex rule (only if category hasn't been deleted by user)
   for (const rule of DOMAIN_CATEGORY_RULES) {
-    if (rule.match.test(domain)) {
+    if (rule.match.test(domain) && isAllowed(rule.category)) {
       return rule.category;
     }
   }
 
   // 3. Fallback
+  if (activeCategories && activeCategories.length > 0) {
+    return activeCategories.includes('General') ? 'General' : activeCategories[0];
+  }
   return 'General';
 }
 
-function getCategoryColor(category, customCategories = []) {
+function getCategoryColor(category, allCategories = []) {
   const found = DOMAIN_CATEGORY_RULES.find(r => r.category === category);
   if (found) return found.color;
   if (category === 'General') return '#94a3b8';
   if (category === 'Other') return '#64748b';
 
-  // Custom category color assignment
-  const customIdx = customCategories.indexOf(category);
-  if (customIdx >= 0) {
-    return CUSTOM_COLORS[customIdx % CUSTOM_COLORS.length];
+  const idx = allCategories.indexOf(category);
+  if (idx >= 0) {
+    return DYNAMIC_PALETTE[idx % DYNAMIC_PALETTE.length];
   }
   return '#94a3b8';
 }
 
 // Aggregate session entries for a specific calendar day (midnight to midnight)
-function aggregateDayStats(sessions, targetDateMs, domainMappings = {}) {
+function aggregateDayStats(sessions, targetDateMs, domainMappings = {}, activeCategories = null) {
   const dayStart = new Date(targetDateMs);
   dayStart.setHours(0, 0, 0, 0);
   const startMs = dayStart.getTime();
@@ -116,7 +120,7 @@ function aggregateDayStats(sessions, targetDateMs, domainMappings = {}) {
       totalActiveMs += clampedDuration;
 
       const domain = s.domain || 'Internal';
-      const category = classifyDomain(domain, domainMappings);
+      const category = classifyDomain(domain, domainMappings, activeCategories);
 
       categories[category] = (categories[category] || 0) + clampedDuration;
 
@@ -145,7 +149,7 @@ function aggregateDayStats(sessions, targetDateMs, domainMappings = {}) {
           hourlyBuckets[h].idleMs += hOverlap;
         } else {
           hourlyBuckets[h].activeMs += hOverlap;
-          const cat = classifyDomain(s.domain, domainMappings);
+          const cat = classifyDomain(s.domain, domainMappings, activeCategories);
           hourlyBuckets[h].categories[cat] = (hourlyBuckets[h].categories[cat] || 0) + hOverlap;
         }
       }
