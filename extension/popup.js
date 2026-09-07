@@ -8,6 +8,7 @@ let selectedDateMs = getMidnight(new Date());
 
 let categories = [];
 let domainMappings = {};
+const expandedDomains = new Set();
 
 function getMidnight(d) {
   const date = new Date(d);
@@ -353,9 +354,10 @@ function renderCategories(stats) {
   if (stats.sortedDomains.length === 0) {
     drilldownDomainList.innerHTML = '<div class="empty-state">No domain logs available</div>';
   } else {
-    drilldownDomainList.innerHTML = stats.sortedDomains.map((d, idx) => {
+    drilldownDomainList.innerHTML = stats.sortedDomains.map((d) => {
       const safeDomain = escapeHtml(d.domain);
       const pageCount = d.pageTitles.length;
+      const isExpanded = expandedDomains.has(d.domain);
       const pagesHtml = pageCount > 0
         ? d.pageTitles.map(p => `<div class="page-title-entry" title="${escapeHtml(p)}">&bull; ${escapeHtml(p)}</div>`).join('')
         : '<div class="page-title-entry">&bull; Active page visits</div>';
@@ -378,9 +380,9 @@ function renderCategories(stats) {
                 ${optionsHtml}
               </select>
             </div>
-            ${pageCount > 0 ? `<button class="btn-pages-toggle" data-target="pages-box-${idx}">${pageCount} pages ▾</button>` : ''}
+            ${pageCount > 0 ? `<button class="btn-pages-toggle" data-domain="${safeDomain}">${pageCount} pages ${isExpanded ? '▴' : '▾'}</button>` : ''}
           </div>
-          <div class="domain-pages-list hidden" id="pages-box-${idx}">
+          <div class="domain-pages-list ${isExpanded ? '' : 'hidden'}">
             ${pagesHtml}
           </div>
         </div>
@@ -426,17 +428,22 @@ drilldownDomainList.addEventListener('change', async (e) => {
   }
 });
 
-// Domain Pages Toggle (Clean, isolated, non-colliding click)
+// Domain Pages Toggle (preserves state in expandedDomains Set)
 drilldownDomainList.addEventListener('click', (e) => {
   const toggleBtn = e.target.closest('.btn-pages-toggle');
   if (!toggleBtn) return;
-  const targetId = toggleBtn.dataset.target;
-  const pagesBox = document.getElementById(targetId);
-  if (pagesBox) {
-    const isNowHidden = pagesBox.classList.toggle('hidden');
-    toggleBtn.textContent = isNowHidden
-      ? toggleBtn.textContent.replace('▴', '▾')
-      : toggleBtn.textContent.replace('▾', '▴');
+  const domain = toggleBtn.dataset.domain;
+  const card = toggleBtn.closest('.domain-card');
+  const pagesBox = card?.querySelector('.domain-pages-list');
+
+  if (expandedDomains.has(domain)) {
+    expandedDomains.delete(domain);
+    if (pagesBox) pagesBox.classList.add('hidden');
+    toggleBtn.textContent = toggleBtn.textContent.replace('▴', '▾');
+  } else {
+    expandedDomains.add(domain);
+    if (pagesBox) pagesBox.classList.remove('hidden');
+    toggleBtn.textContent = toggleBtn.textContent.replace('▾', '▴');
   }
 });
 
@@ -490,9 +497,17 @@ window.addEventListener('DOMContentLoaded', () => {
   loadData();
   liveTicker = setInterval(() => {
     updateTicker();
-    loadData();
   }, 1000);
 });
+
+// Reactively update when background worker records new sessions
+if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && (changes.sessions || changes.current_active)) {
+      loadData();
+    }
+  });
+}
 
 window.addEventListener('unload', () => {
   if (liveTicker) clearInterval(liveTicker);

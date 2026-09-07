@@ -59,6 +59,27 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: hsla(222, 30%, 50%, 0.28) transparent;
+}
+
+/* Custom Slick Scrollbar (WebKit & Chromium) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsla(222, 30%, 50%, 0.28);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-base);
 }
 
 body {
@@ -276,21 +297,15 @@ body {
   background: var(--accent-tint);
 }
 
-/* Main Container */
+/* Main Container - Anti-Flicker Architecture */
 .app-main {
   flex: 1;
-  overflow-y: auto;
-  padding: 12px;
+  overflow-y: scroll; /* Always reserve gutter so UI never shifts or flickers on content expand */
+  scrollbar-gutter: stable;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-}
-
-.app-main::-webkit-scrollbar {
-  width: 4px;
-}
-.app-main::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  overscroll-behavior: contain;
 }
 
 .view-panel {
@@ -721,6 +736,9 @@ body {
   gap: 8px;
   max-height: 290px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  padding-right: 3px;
 }
 
 .domain-card {
