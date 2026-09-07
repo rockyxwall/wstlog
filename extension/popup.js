@@ -22,7 +22,7 @@ function initVersion() {
   if (el) {
     const v = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
       ? chrome.runtime.getManifest().version
-      : '0.0.2';
+      : '0.0.3';
     el.textContent = `v${v}`;
   }
 }

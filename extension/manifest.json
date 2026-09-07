@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ACTLog - Browser Activity Logger",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Standalone in-browser activity logger and time tracker with clean session logs",
   "action": {
     "default_popup": "popup.html",
