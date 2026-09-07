@@ -52,6 +52,16 @@ const btnClearLogs = document.getElementById('btn-clear-logs');
 const storageStatus = document.getElementById('storage-status');
 
 // Helper formatters
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function formatDuration(ms) {
   if (!ms || ms < 0) return '0m';
   const totalSecs = Math.floor(ms / 1000);
@@ -210,7 +220,7 @@ function renderOverview(stats) {
     const tooltip = `${b.hour.toString().padStart(2, '0')}:00 — Active: ${formatDuration(b.activeMs)}, Idle: ${formatDuration(b.idleMs)} (${topCat})`;
 
     return `
-      <div class="timeline-slot" title="${tooltip}">
+      <div class="timeline-slot" title="${escapeHtml(tooltip)}">
         <div class="timeline-bar-fill" style="
           height: ${Math.max(4, heightPct)}%;
           background: ${heightPct === 0 ? 'transparent' : catColor};
@@ -228,13 +238,15 @@ function renderOverview(stats) {
     overviewDomainList.innerHTML = top4.map(item => {
       const pct = stats.totalActiveMs > 0 ? Math.round((item.durationMs / stats.totalActiveMs) * 100) : 0;
       const catColor = getCategoryColor(item.category);
+      const safeDomain = escapeHtml(item.domain);
+      const safeCat = escapeHtml(item.category);
       return `
         <div class="domain-item">
           <div class="domain-item-top">
             <div class="domain-name-pill">
-              <span class="domain-item-name" title="${item.domain}">${item.domain}</span>
+              <span class="domain-item-name" title="${safeDomain}">${safeDomain}</span>
               <span class="category-tag" style="background: ${catColor}20; color: ${catColor}; border: 1px solid ${catColor}40;">
-                ${item.category}
+                ${safeCat}
               </span>
             </div>
             <span class="domain-item-time">${formatDuration(item.durationMs)} (${pct}%)</span>
@@ -258,10 +270,11 @@ function renderCategories(stats) {
     categoryBarsList.innerHTML = catEntries.map(([name, ms]) => {
       const pct = stats.totalActiveMs > 0 ? Math.round((ms / stats.totalActiveMs) * 100) : 0;
       const color = getCategoryColor(name);
+      const safeName = escapeHtml(name);
       return `
         <div class="category-row">
           <div class="category-row-top">
-            <span class="category-name" style="color: ${color};">${name}</span>
+            <span class="category-name" style="color: ${color};">${safeName}</span>
             <span class="category-time">${formatDuration(ms)} (${pct}%)</span>
           </div>
           <div class="domain-progress-bg">
@@ -278,8 +291,10 @@ function renderCategories(stats) {
   } else {
     drilldownDomainList.innerHTML = stats.sortedDomains.map(d => {
       const catColor = getCategoryColor(d.category);
+      const safeDomain = escapeHtml(d.domain);
+      const safeCat = escapeHtml(d.category);
       const pagesHtml = d.pageTitles.length > 0
-        ? d.pageTitles.map(p => `<div class="page-title-entry" title="${p}">&bull; ${p}</div>`).join('')
+        ? d.pageTitles.map(p => `<div class="page-title-entry" title="${escapeHtml(p)}">&bull; ${escapeHtml(p)}</div>`).join('')
         : '<div class="page-title-entry">&bull; Active page visits</div>';
 
       return `
@@ -287,9 +302,9 @@ function renderCategories(stats) {
           <div class="drilldown-header">
             <div class="drilldown-title-wrap">
               <span class="caret-icon">&#9654;</span>
-              <span class="domain-item-name" title="${d.domain}">${d.domain}</span>
+              <span class="domain-item-name" title="${safeDomain}">${safeDomain}</span>
               <span class="category-tag" style="background: ${catColor}20; color: ${catColor};">
-                ${d.category}
+                ${safeCat}
               </span>
             </div>
             <span class="domain-item-time">${formatDuration(d.durationMs)}</span>
