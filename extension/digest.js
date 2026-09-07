@@ -259,3 +259,178 @@ STRICT CONSTRAINTS:
 DOMAINS TO CLASSIFY:
 ${domainList}`;
 }
+
+function isBrowserExecutable(appName) {
+  if (!appName) return false;
+  return /(chrome|msedge|firefox|brave|opera|vivaldi|arc)(\.exe)?$/i.test(appName);
+}
+
+// Aggregate Desktop Sessions for target date with browser domain linkage
+function aggregateDesktopDayStats(desktopSessions = [], targetDateMs, browserDayStats = null) {
+  const dayStart = new Date(targetDateMs);
+  dayStart.setHours(0, 0, 0, 0);
+  const startMs = dayStart.getTime();
+  const endMs = startMs + 24 * 60 * 60 * 1000;
+
+  let totalDesktopActiveMs = 0;
+  let totalDesktopIdleMs = 0;
+  const appTotals = {};
+  const hourlyBuckets = Array.from({ length: 24 }, (_, i) => ({
+    hour: i,
+    activeMs: 0,
+    idleMs: 0,
+    apps: {}
+  }));
+
+  for (const s of desktopSessions) {
+    const sStart = s.start_utc;
+    const sEnd = s.end_utc || sStart;
+
+    if (sEnd <= startMs || sStart >= endMs) continue;
+
+    const clampedStart = Math.max(sStart, startMs);
+    const clampedEnd = Math.min(sEnd, endMs);
+    const clampedDuration = Math.max(0, clampedEnd - clampedStart);
+
+    if (clampedDuration <= 0) continue;
+
+    const isIdle = s.source === 'afk' || s.app === 'idle' || s.app === 'locked' || s.app === '<System Crash>';
+
+    if (isIdle) {
+      totalDesktopIdleMs += clampedDuration;
+    } else {
+      totalDesktopActiveMs += clampedDuration;
+
+      const appName = s.app || 'Unknown.exe';
+      if (!appTotals[appName]) {
+        appTotals[appName] = {
+          app: appName,
+          durationMs: 0,
+          windowTitles: new Set(),
+          isBrowser: isBrowserExecutable(appName)
+        };
+      }
+      appTotals[appName].durationMs += clampedDuration;
+      if (s.title && s.title !== appName) {
+        appTotals[appName].windowTitles.add(s.title);
+      }
+    }
+
+    // Clip into 24-hour buckets
+    for (let h = 0; h < 24; h++) {
+      const hStart = startMs + h * 3600000;
+      const hEnd = hStart + 3600000;
+      const hOverlap = Math.max(0, Math.min(clampedEnd, hEnd) - Math.max(clampedStart, hStart));
+
+      if (hOverlap > 0) {
+        if (isIdle) {
+          hourlyBuckets[h].idleMs += hOverlap;
+        } else {
+          hourlyBuckets[h].activeMs += hOverlap;
+          const app = s.app || 'Unknown.exe';
+          hourlyBuckets[h].apps[app] = (hourlyBuckets[h].apps[app] || 0) + hOverlap;
+        }
+      }
+    }
+  }
+
+  const sortedApps = Object.values(appTotals)
+    .map(a => {
+      const res = {
+        app: a.app,
+        durationMs: a.durationMs,
+        isBrowser: a.isBrowser,
+        windowTitles: Array.from(a.windowTitles).slice(0, 5),
+        nestedDomains: []
+      };
+      if (a.isBrowser && browserDayStats && Array.isArray(browserDayStats.sortedDomains)) {
+        res.nestedDomains = browserDayStats.sortedDomains;
+      }
+      return res;
+    })
+    .sort((a, b) => b.durationMs - a.durationMs);
+
+  return {
+    dateMs: startMs,
+    totalDesktopActiveMs,
+    totalDesktopIdleMs,
+    sortedApps,
+    hourlyBuckets
+  };
+}
+
+// Unified Envelope Import & Deduplication Merger
+function mergeImportEnvelope(existingBrowserSessions = [], existingDesktopSessions = [], incomingData = null) {
+  let importedBrowserCount = 0;
+  let importedDesktopCount = 0;
+
+  const mergedBrowser = [...existingBrowserSessions];
+  const mergedDesktop = [...existingDesktopSessions];
+
+  const seenBrowser = new Set();
+  for (const s of existingBrowserSessions) {
+    seenBrowser.add(`${s.start_utc}_${s.domain || s.url || ''}`);
+  }
+
+  const seenDesktop = new Set();
+  for (const s of existingDesktopSessions) {
+    seenDesktop.add(s.id || `${s.start_utc}_${s.app || ''}_${s.source || ''}`);
+  }
+
+  let incomingBrowser = [];
+  let incomingDesktop = [];
+
+  if (Array.isArray(incomingData)) {
+    // Legacy flat array format: treat directly as browser sessions
+    incomingBrowser = incomingData;
+  } else if (incomingData && typeof incomingData === 'object') {
+    if (Array.isArray(incomingData.browser_sessions)) {
+      incomingBrowser = incomingData.browser_sessions;
+    }
+    if (Array.isArray(incomingData.desktop_sessions)) {
+      incomingDesktop = incomingData.desktop_sessions;
+    }
+  }
+
+  for (const b of incomingBrowser) {
+    if (!b || !b.start_utc) continue;
+    const key = `${b.start_utc}_${b.domain || b.url || ''}`;
+    if (!seenBrowser.has(key)) {
+      seenBrowser.add(key);
+      mergedBrowser.push(b);
+      importedBrowserCount++;
+    }
+  }
+
+  for (const d of incomingDesktop) {
+    if (!d || !d.start_utc) continue;
+    const key = d.id || `${d.start_utc}_${d.app || ''}_${d.source || ''}`;
+    if (!seenDesktop.has(key)) {
+      seenDesktop.add(key);
+      mergedDesktop.push(d);
+      importedDesktopCount++;
+    }
+  }
+
+  return {
+    browserSessions: mergedBrowser,
+    desktopSessions: mergedDesktop,
+    importedBrowserCount,
+    importedDesktopCount
+  };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    INITIAL_DEFAULT_CATEGORIES,
+    DOMAIN_CATEGORY_RULES,
+    classifyDomain,
+    getCategoryColor,
+    aggregateDayStats,
+    aggregateDesktopDayStats,
+    isBrowserExecutable,
+    mergeImportEnvelope,
+    generateAIDigest,
+    generateAISortPrompt
+  };
+}

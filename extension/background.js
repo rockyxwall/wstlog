@@ -2,6 +2,10 @@
 // Ponytail: native Chrome APIs, sequential async lock, AFK audio bypass, crash recovery
 
 const HEARTBEAT_ALARM = 'actlog_heartbeat_alarm';
+const DESKTOP_SYNC_ALARM = 'actlog_desktop_sync_alarm';
+const DESKTOP_API_URL = 'http://127.0.0.1:5566/api/sessions';
+const MAX_DESKTOP_RETENTION_MS = 14 * 24 * 60 * 60 * 1000; // 14 days sliding window
+const MAX_DESKTOP_RECORDS = 30000;
 const IDLE_DETECTION_SECONDS = 120; // 2 minutes
 const MAX_UNATTENDED_MEDIA_MS = 4 * 60 * 60 * 1000; // 4 hours cap on unattended audio
 const MIN_SESSION_DURATION_MS = 1000; // Ignore micro-glitches under 1s
@@ -332,7 +336,65 @@ chrome.idle.onStateChanged.addListener((newState) => {
   });
 });
 
-// Periodic heartbeat alarm
+// Sync Desktop Sessions from local Rust daemon (127.0.0.1:5566)
+async function syncDesktopSessions() {
+  try {
+    const store = await chrome.storage.local.get(['desktop_sessions', 'desktop_last_sync_utc']);
+    const lastSync = store.desktop_last_sync_utc;
+    const since = lastSync ? Math.max(0, lastSync - 60000) : (Date.now() - 86400000);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1800);
+
+    const res = await fetch(`${DESKTOP_API_URL}?since=${since}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      await chrome.storage.local.set({ desktop_daemon_active: false });
+      return;
+    }
+
+    const fetched = await res.json();
+    if (!Array.isArray(fetched)) {
+      await chrome.storage.local.set({ desktop_daemon_active: false });
+      return;
+    }
+
+    const existing = Array.isArray(store.desktop_sessions) ? store.desktop_sessions : [];
+    const seen = new Set();
+    for (const s of existing) {
+      seen.add(s.id || `${s.start_utc}_${s.app}_${s.source}`);
+    }
+
+    for (const item of fetched) {
+      const key = item.id || `${item.start_utc}_${item.app}_${item.source}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        existing.push(item);
+      }
+    }
+
+    // Sliding window retention: drop records older than 14 days
+    const cutoff = Date.now() - MAX_DESKTOP_RETENTION_MS;
+    const pruned = existing.filter(s => (s.end_utc || s.start_utc) >= cutoff);
+    if (pruned.length > MAX_DESKTOP_RECORDS) {
+      pruned.splice(0, pruned.length - MAX_DESKTOP_RECORDS);
+    }
+
+    await chrome.storage.local.set({
+      desktop_sessions: pruned,
+      desktop_last_sync_utc: Date.now(),
+      desktop_daemon_active: true
+    });
+  } catch (_err) {
+    // Daemon offline or unreachable: fall back silently to standalone browser mode
+    await chrome.storage.local.set({ desktop_daemon_active: false });
+  }
+}
+
+// Periodic alarms (heartbeat + desktop sync)
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === HEARTBEAT_ALARM) {
     enqueue(async () => {
@@ -347,6 +409,16 @@ chrome.alarms.onAlarm.addListener((alarm) => {
         await chrome.storage.local.set({ current_idle: store.current_idle });
       }
     });
+  } else if (alarm.name === DESKTOP_SYNC_ALARM) {
+    enqueue(syncDesktopSessions);
+  }
+});
+
+// Runtime messages (immediate sync trigger from popup)
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message && message.type === 'TRIGGER_DESKTOP_SYNC') {
+    syncDesktopSessions().then(() => sendResponse({ ok: true }));
+    return true;
   }
 });
 
@@ -354,17 +426,21 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.idle.setDetectionInterval(IDLE_DETECTION_SECONDS);
   chrome.alarms.create(HEARTBEAT_ALARM, { periodInMinutes: 1 });
+  chrome.alarms.create(DESKTOP_SYNC_ALARM, { periodInMinutes: 5 });
   enqueue(async () => {
     await recoverDanglingSessions();
     await checkActiveTab();
+    await syncDesktopSessions();
   });
 });
 
 chrome.runtime.onStartup.addListener(() => {
   chrome.idle.setDetectionInterval(IDLE_DETECTION_SECONDS);
   chrome.alarms.create(HEARTBEAT_ALARM, { periodInMinutes: 1 });
+  chrome.alarms.create(DESKTOP_SYNC_ALARM, { periodInMinutes: 5 });
   enqueue(async () => {
     await recoverDanglingSessions();
     await checkActiveTab();
+    await syncDesktopSessions();
   });
 });

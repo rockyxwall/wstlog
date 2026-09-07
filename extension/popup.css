@@ -140,6 +140,31 @@ body {
   border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
+.daemon-status-badge {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-l1);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+}
+
+.daemon-status-badge.online {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--status-online);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.daemon-status-badge.offline {
+  background: var(--bg-l1);
+  color: var(--text-muted);
+}
+
 .header-controls {
   display: flex;
   align-items: center;
@@ -265,13 +290,53 @@ body {
   font-size: var(--text-sm);
 }
 
-/* Nav Tabs (2 Equal Columns) */
-.nav-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* Navigation Container & Scope Bar */
+.nav-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   background: var(--bg-l1);
   border-bottom: 1px solid var(--border-subtle);
+  padding-right: 12px;
   flex-shrink: 0;
+}
+
+.nav-tabs {
+  display: flex;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.scope-selector {
+  display: inline-flex;
+  background: var(--bg-l0);
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  gap: 2px;
+}
+
+.scope-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.scope-btn:hover {
+  color: var(--text-primary);
+}
+
+.scope-btn.active {
+  background: var(--accent-base);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
 .nav-tab {
@@ -789,6 +854,132 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Desktop App Breakdown & Nested Drawer */
+.desktop-app-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-l1);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.desktop-app-card:hover {
+  background: var(--bg-l2);
+  border-color: var(--border-active);
+}
+
+.desktop-app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.desktop-app-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.desktop-app-icon {
+  font-size: var(--text-sm);
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-l2);
+  border-radius: 6px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-subtle);
+}
+
+.desktop-app-name {
+  font-weight: 600;
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desktop-app-duration {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.desktop-app-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 6px;
+}
+
+.desktop-app-hint {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+
+.btn-nested-domains {
+  background: var(--accent-tint);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: var(--accent-hover);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-nested-domains:hover {
+  background: var(--accent-base);
+  color: #fff;
+}
+
+.nested-domains-drawer {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.nested-domains-drawer.hidden {
+  display: none;
+}
+
+.nested-domain-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  padding: 2px 0;
+}
+
+.nested-domain-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+}
+
+.nested-domain-time {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
 }
 
 .btn-sm {

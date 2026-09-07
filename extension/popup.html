@@ -13,6 +13,7 @@
       <div class="logo-dot"></div>
       <span class="brand-title">ACTLog</span>
       <span class="brand-badge" id="app-version">--</span>
+      <span class="daemon-status-badge offline" id="daemon-status-badge" title="ACTLog Windows Daemon">⚪ Browser</span>
     </div>
     <div class="header-controls">
       <!-- Date Switcher -->
@@ -32,17 +33,25 @@
         <span class="popover-badge" id="popover-storage-count">0 sessions</span>
       </div>
       <div class="popover-actions">
-        <button class="btn-action popover-btn" id="btn-export-json">Export Full JSON</button>
+        <button class="btn-action popover-btn" id="btn-export-json">Export JSON</button>
+        <button class="btn-action popover-btn" id="btn-import-json">Import JSON</button>
+        <input type="file" id="input-import-json" accept=".json" class="hidden">
         <button class="btn-action btn-danger popover-btn" id="btn-clear-logs">Clear Day's Logs</button>
       </div>
     </div>
   </header>
 
-  <!-- Navigation Tabs (2 Primary Tabs) -->
-  <nav class="nav-tabs">
-    <button class="nav-tab active" id="tab-overview" data-view="view-overview">Overview</button>
-    <button class="nav-tab" id="tab-categories" data-view="view-categories">Categories</button>
-  </nav>
+  <!-- Navigation Tabs (2 Primary Tabs) & Scope Selector -->
+  <div class="nav-container">
+    <nav class="nav-tabs">
+      <button class="nav-tab active" id="tab-overview" data-view="view-overview">Overview</button>
+      <button class="nav-tab" id="tab-categories" data-view="view-categories">Breakdown</button>
+    </nav>
+    <div class="scope-selector" id="scope-selector">
+      <button class="scope-btn active" id="scope-btn-pc" data-scope="pc" title="View Entire PC Activity">&#128421; PC</button>
+      <button class="scope-btn" id="scope-btn-browser" data-scope="browser" title="View Browser Only Activity">&#127760; Web</button>
+    </div>
+  </div>
 
   <!-- Main Content Views -->
   <main class="app-main">
@@ -103,12 +112,23 @@
       </section>
     </div>
 
-    <!-- View 2: Categories & Drilldown -->
+    <!-- View 2: Breakdown & Drilldown -->
     <div class="view-panel hidden" id="view-categories">
-      <!-- Category Management with Chips -->
-      <section class="card category-create-card">
+      <!-- Desktop Application Breakdown (Shown in PC Scope) -->
+      <section class="card section-card" id="section-desktop-apps">
         <div class="section-header">
-          <span class="section-title">Manage Categories</span>
+          <span class="section-title">Desktop Applications</span>
+          <span class="section-subtext">Windows OS activity</span>
+        </div>
+        <div class="domain-cards-list" id="drilldown-app-list">
+          <div class="empty-state">No desktop app logs recorded</div>
+        </div>
+      </section>
+
+      <!-- Category Management with Chips -->
+      <section class="card category-create-card" id="section-categories-manage">
+        <div class="section-header">
+          <span class="section-title">Web Categories</span>
           <span class="section-subtext">Click &#10005; to delete</span>
         </div>
         <div class="category-add-row">
@@ -119,7 +139,7 @@
       </section>
 
       <!-- Category Distribution Cards -->
-      <section class="card section-card">
+      <section class="card section-card" id="section-category-dist">
         <div class="section-header">
           <span class="section-title">Category Distribution</span>
         </div>
@@ -129,7 +149,7 @@
       </section>
 
       <!-- Domain Breakdown with Decluttered Override -->
-      <section class="card section-card">
+      <section class="card section-card" id="section-domain-breakdown">
         <div class="section-header">
           <span class="section-title">Domain Categorization</span>
           <span class="section-subtext">Assign category per domain</span>

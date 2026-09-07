@@ -3,7 +3,7 @@
 
 [Setup]
 AppName=actlog
-AppVersion=0.0.3-beta
+AppVersion=0.0.4-beta
 WizardStyle=modern
 DefaultDirName={localappdata}\Programs\actlog
 DefaultGroupName=actlog
@@ -11,7 +11,7 @@ UninstallDisplayIcon={app}\actlog.exe
 Compression=lzma2
 SolidCompression=yes
 OutputDir=..\dist
-OutputBaseFilename=actlog-v0.0.3-beta-installer
+OutputBaseFilename=actlog-v0.0.4-beta-installer
 PrivilegesRequired=lowest
 DisableProgramGroupPage=yes
 

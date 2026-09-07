@@ -118,6 +118,84 @@ assert.ok(digest.promptText.includes('Focus: 80%'), 'Prompt should calculate 80%
 assert.ok(digest.promptText.includes('github.com'), 'Prompt should list top domain');
 console.log('  PASS: generateAIDigest produces expected LLM prompt format');
 
+// Test browser executable detection
+assert.equal(context.isBrowserExecutable('chrome.exe'), true);
+assert.equal(context.isBrowserExecutable('msedge.exe'), true);
+assert.equal(context.isBrowserExecutable('Code.exe'), false);
+assert.equal(context.isBrowserExecutable('Slack.exe'), false);
+console.log('  PASS: isBrowserExecutable correctly identifies browser processes');
+
+// Test desktop day aggregation & nested browser domain linkage
+const sampleDesktopSessions = [
+  {
+    app: 'Code.exe',
+    title: 'main.rs',
+    start_utc: startMs + 9 * 3600000,
+    end_utc: startMs + 11 * 3600000,
+    source: 'foreground'
+  },
+  {
+    app: 'chrome.exe',
+    title: 'GitHub',
+    start_utc: startMs + 11 * 3600000,
+    end_utc: startMs + 12 * 3600000,
+    source: 'foreground'
+  },
+  {
+    app: 'idle',
+    title: 'AFK',
+    start_utc: startMs + 12 * 3600000,
+    end_utc: startMs + 12.5 * 3600000,
+    source: 'afk'
+  }
+];
+
+const desktopStats = context.aggregateDesktopDayStats(sampleDesktopSessions, startMs, stats);
+assert.equal(desktopStats.totalDesktopActiveMs, 3 * 3600000, 'Total desktop active time must be 3h');
+assert.equal(desktopStats.totalDesktopIdleMs, 0.5 * 3600000, 'Total desktop idle time must be 30m');
+assert.equal(desktopStats.sortedApps.length, 2, 'Must have 2 non-idle apps');
+assert.equal(desktopStats.sortedApps[0].app, 'Code.exe', 'Top app must be Code.exe');
+assert.equal(desktopStats.sortedApps[1].app, 'chrome.exe', 'Second app must be chrome.exe');
+assert.equal(desktopStats.sortedApps[1].isBrowser, true, 'chrome.exe must be flagged isBrowser');
+assert.equal(desktopStats.sortedApps[1].nestedDomains.length, 2, 'chrome.exe must link nested web domains');
+console.log('  PASS: aggregateDesktopDayStats correctly calculates PC active/idle and links nested domains');
+
+// Test Unified Envelope & Legacy Import Deduplication
+const initialBrowser = [
+  { domain: 'github.com', start_utc: 1000, end_utc: 2000 }
+];
+const initialDesktop = [
+  { id: 'uuid-1', app: 'Code.exe', start_utc: 1000, end_utc: 2000, source: 'foreground' }
+];
+
+// Test A: Legacy flat array import
+const legacyIncoming = [
+  { domain: 'github.com', start_utc: 1000, end_utc: 2000 }, // Duplicate
+  { domain: 'docs.rs', start_utc: 3000, end_utc: 4000 } // New
+];
+const legacyResult = context.mergeImportEnvelope(initialBrowser, initialDesktop, legacyIncoming);
+assert.equal(legacyResult.browserSessions.length, 2, 'Must deduplicate and have 2 browser sessions');
+assert.equal(legacyResult.importedBrowserCount, 1, 'Must report exactly 1 imported browser session');
+assert.equal(legacyResult.desktopSessions.length, 1, 'Desktop sessions must remain untouched');
+
+// Test B: Modern envelope import
+const envelopeIncoming = {
+  actlog_version: '0.0.4',
+  browser_sessions: [
+    { domain: 'stackoverflow.com', start_utc: 5000, end_utc: 6000 }
+  ],
+  desktop_sessions: [
+    { id: 'uuid-1', app: 'Code.exe', start_utc: 1000, end_utc: 2000, source: 'foreground' }, // Duplicate
+    { id: 'uuid-2', app: 'slack.exe', start_utc: 7000, end_utc: 8000, source: 'foreground' } // New
+  ]
+};
+const envelopeResult = context.mergeImportEnvelope(legacyResult.browserSessions, legacyResult.desktopSessions, envelopeIncoming);
+assert.equal(envelopeResult.browserSessions.length, 3, 'Must have 3 browser sessions');
+assert.equal(envelopeResult.desktopSessions.length, 2, 'Must deduplicate and have 2 desktop sessions');
+assert.equal(envelopeResult.importedBrowserCount, 1);
+assert.equal(envelopeResult.importedDesktopCount, 1);
+console.log('  PASS: mergeImportEnvelope handles legacy arrays and envelopes with idempotent deduplication');
+
 // 3. Script syntax validation
 console.log('\n[3/4] Validating all scripts syntax...');
 const scripts = ['extension/background.js', 'extension/digest.js', 'extension/popup.js'];
@@ -131,15 +209,20 @@ for (const file of scripts) {
 console.log('\n[4/4] Verifying CSP compliance and 2-tab layout integrity...');
 const popupHtml = fs.readFileSync('extension/popup.html', 'utf8');
 
-// Ensure 2 tabs, settings popover, and zero AI prompt bloat
+// Ensure 2 tabs, settings popover, scope selector, daemon badge, and zero AI prompt bloat
 assert.ok(popupHtml.includes('id="tab-overview"'), 'Overview tab must exist');
 assert.ok(popupHtml.includes('id="tab-categories"'), 'Categories tab must exist');
+assert.ok(popupHtml.includes('id="daemon-status-badge"'), 'Daemon status badge must exist in header');
+assert.ok(popupHtml.includes('id="scope-selector"'), 'Scope selector must exist');
+assert.ok(popupHtml.includes('id="btn-import-json"'), 'Import JSON button must exist');
+assert.ok(popupHtml.includes('id="input-import-json"'), 'Import file input must exist');
+assert.ok(popupHtml.includes('id="drilldown-app-list"'), 'Desktop apps breakdown list must exist');
 assert.equal(popupHtml.includes('id="tab-ai"'), false, 'AI tab must be removed');
 assert.ok(popupHtml.includes('id="btn-settings"'), 'Settings button must exist in header');
 assert.ok(popupHtml.includes('id="settings-popover"'), 'Settings popover must exist');
 assert.equal(popupHtml.includes('id="ai-sort-preview"'), false, 'AI sort prompt must be removed');
 assert.equal(popupHtml.includes('id="ai-prompt-preview"'), false, 'AI digest prompt must be removed');
-console.log('  PASS: DOM layout verified (2 primary tabs, settings popover, zero prompt bloat)');
+console.log('  PASS: DOM layout verified (2 primary tabs, scope selector, daemon status, zero prompt bloat)');
 
 const allExtensionFiles = [
   'extension/popup.html',
