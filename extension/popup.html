@@ -7,26 +7,41 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <!-- Header with Brand and Day Navigation -->
+  <!-- Header with Brand, Day Navigation, and Settings -->
   <header class="app-header">
     <div class="brand">
       <div class="logo-dot"></div>
       <span class="brand-title">ACTLog</span>
       <span class="brand-badge" id="app-version">--</span>
     </div>
-    <!-- Date Switcher -->
-    <div class="date-navigator">
-      <button class="btn-nav" id="btn-prev-day" title="Previous day">&lsaquo;</button>
-      <span class="date-label" id="current-date-label">Today</span>
-      <button class="btn-nav" id="btn-next-day" title="Next day" disabled>&rsaquo;</button>
+    <div class="header-controls">
+      <!-- Date Switcher -->
+      <div class="date-navigator">
+        <button class="btn-nav" id="btn-prev-day" title="Previous day">&lsaquo;</button>
+        <span class="date-label" id="current-date-label">Today</span>
+        <button class="btn-nav" id="btn-next-day" title="Next day" disabled>&rsaquo;</button>
+      </div>
+      <!-- Settings Trigger Button -->
+      <button class="btn-icon" id="btn-settings" title="Settings & Data">&#9881;</button>
+    </div>
+
+    <!-- Settings Floating Popover -->
+    <div class="settings-popover hidden" id="settings-popover">
+      <div class="popover-header">
+        <span class="popover-title">Storage &amp; Data</span>
+        <span class="popover-badge" id="popover-storage-count">0 sessions</span>
+      </div>
+      <div class="popover-actions">
+        <button class="btn-action popover-btn" id="btn-export-json">Export Full JSON</button>
+        <button class="btn-action btn-danger popover-btn" id="btn-clear-logs">Clear Day's Logs</button>
+      </div>
     </div>
   </header>
 
-  <!-- Navigation Tabs -->
+  <!-- Navigation Tabs (2 Primary Tabs) -->
   <nav class="nav-tabs">
     <button class="nav-tab active" id="tab-overview" data-view="view-overview">Overview</button>
     <button class="nav-tab" id="tab-categories" data-view="view-categories">Categories</button>
-    <button class="nav-tab" id="tab-ai" data-view="view-ai">AI Digest</button>
   </nav>
 
   <!-- Main Content Views -->
@@ -106,7 +121,7 @@
       <section class="card category-create-card">
         <div class="section-header">
           <span class="section-title">Manage Categories</span>
-          <span class="section-subtext">Click ✕ to delete</span>
+          <span class="section-subtext">Click &#10005; to delete</span>
         </div>
         <div class="category-add-row">
           <input type="text" id="input-new-cat" class="cat-input" placeholder="New category name..." maxlength="20">
@@ -133,46 +148,6 @@
         </div>
         <div class="domain-cards-list" id="drilldown-domain-list">
           <div class="empty-state">No domain logs available</div>
-        </div>
-      </section>
-
-      <!-- AI Domain Auto-Sort Prompt (Pro Preview) -->
-      <section class="card section-card ai-sort-card">
-        <div class="section-header">
-          <div class="ai-title-wrap">
-            <span class="ai-tag">PRO PROMPT</span>
-            <span class="section-title">AI Auto-Sort Prompt</span>
-          </div>
-          <button class="btn-action btn-sm" id="btn-copy-sort-prompt">Copy Prompt</button>
-        </div>
-        <p class="ai-desc">Strict LLM prompt with your active domains to paste into Gemini / Claude:</p>
-        <pre class="ai-prompt-preview ai-sort-preview" id="ai-sort-preview">Generating prompt...</pre>
-      </section>
-    </div>
-
-    <!-- View 3: AI Digest -->
-    <div class="view-panel hidden" id="view-ai">
-      <section class="card ai-card">
-        <div class="ai-header">
-          <div class="ai-title-wrap">
-            <span class="ai-tag">PREVIEW</span>
-            <span class="ai-heading">Daily Activity Digest</span>
-          </div>
-          <button class="btn-copy-ai" id="btn-copy-ai" title="Copy formatted prompt for AI">
-            <span id="copy-btn-text">Copy for AI</span>
-          </button>
-        </div>
-        <p class="ai-desc">Token-efficient context ready for Gemini, Claude, or ChatGPT summarization:</p>
-        <pre class="ai-prompt-preview" id="ai-prompt-preview">Generating summary...</pre>
-      </section>
-
-      <section class="card section-card">
-        <div class="section-header">
-          <span class="section-title">Data Management</span>
-        </div>
-        <div class="export-actions">
-          <button class="btn-action" id="btn-export-json">Export Full JSON</button>
-          <button class="btn-action btn-danger" id="btn-clear-logs">Clear Day's Logs</button>
         </div>
       </section>
     </div>

@@ -29,11 +29,14 @@ function initVersion() {
 // DOM Elements
 const tabOverview = document.getElementById('tab-overview');
 const tabCategories = document.getElementById('tab-categories');
-const tabAi = document.getElementById('tab-ai');
 
 const viewOverview = document.getElementById('view-overview');
 const viewCategories = document.getElementById('view-categories');
-const viewAi = document.getElementById('view-ai');
+
+// Header & Settings Elements
+const btnSettings = document.getElementById('btn-settings');
+const settingsPopover = document.getElementById('settings-popover');
+const popoverStorageCount = document.getElementById('popover-storage-count');
 
 // Date Nav
 const btnPrevDay = document.getElementById('btn-prev-day');
@@ -59,13 +62,8 @@ const categoryBarsList = document.getElementById('category-bars-list');
 const drilldownDomainList = document.getElementById('drilldown-domain-list');
 const inputNewCat = document.getElementById('input-new-cat');
 const btnAddCat = document.getElementById('btn-add-cat');
-const aiSortPreview = document.getElementById('ai-sort-preview');
-const btnCopySortPrompt = document.getElementById('btn-copy-sort-prompt');
 
-// AI Digest Elements
-const aiPromptPreview = document.getElementById('ai-prompt-preview');
-const btnCopyAi = document.getElementById('btn-copy-ai');
-const copyBtnText = document.getElementById('copy-btn-text');
+// Settings & Storage Actions
 const btnExportJson = document.getElementById('btn-export-json');
 const btnClearLogs = document.getElementById('btn-clear-logs');
 const storageStatus = document.getElementById('storage-status');
@@ -127,12 +125,12 @@ function updateDateLabel() {
   }
 }
 
-// Tab Switching
+// Tab Switching (2 primary tabs)
 function switchTab(targetViewId, activeTabBtn) {
-  [viewOverview, viewCategories, viewAi].forEach(view => {
+  [viewOverview, viewCategories].forEach(view => {
     view.classList.toggle('hidden', view.id !== targetViewId);
   });
-  [tabOverview, tabCategories, tabAi].forEach(tab => {
+  [tabOverview, tabCategories].forEach(tab => {
     tab.classList.toggle('active', tab === activeTabBtn);
   });
   renderAllViews();
@@ -140,7 +138,18 @@ function switchTab(targetViewId, activeTabBtn) {
 
 tabOverview.addEventListener('click', () => switchTab('view-overview', tabOverview));
 tabCategories.addEventListener('click', () => switchTab('view-categories', tabCategories));
-tabAi.addEventListener('click', () => switchTab('view-ai', tabAi));
+
+// Settings Popover Handlers
+btnSettings.addEventListener('click', (e) => {
+  e.stopPropagation();
+  settingsPopover.classList.toggle('hidden');
+});
+
+document.addEventListener('click', (e) => {
+  if (!settingsPopover.contains(e.target) && e.target !== btnSettings) {
+    settingsPopover.classList.add('hidden');
+  }
+});
 
 // Date Nav Listeners
 btnPrevDay.addEventListener('click', () => {
@@ -184,6 +193,9 @@ async function loadData() {
     : {};
 
   storageStatus.textContent = `${cachedSessions.length} total sessions`;
+  if (popoverStorageCount) {
+    popoverStorageCount.textContent = `${cachedSessions.length} sessions`;
+  }
   renderAllViews();
 }
 
@@ -212,8 +224,6 @@ function renderAllViews() {
   renderOverview(stats);
   renderCategoryChips();
   renderCategories(stats);
-  renderAIDigest(stats);
-  renderAISortPrompt(stats);
 }
 
 function renderOverview(stats) {
@@ -430,29 +440,6 @@ drilldownDomainList.addEventListener('click', (e) => {
   }
 });
 
-// Render Strict AI Auto-Sort Prompt for Paid/Pro Users
-function renderAISortPrompt(stats) {
-  const visitedDomains = stats.sortedDomains.map(d => d.domain);
-  const prompt = generateAISortPrompt(visitedDomains, categories);
-  aiSortPreview.textContent = prompt;
-}
-
-btnCopySortPrompt.addEventListener('click', async () => {
-  const text = aiSortPreview.textContent;
-  try {
-    await navigator.clipboard.writeText(text);
-    btnCopySortPrompt.textContent = 'Copied!';
-    setTimeout(() => { btnCopySortPrompt.textContent = 'Copy Prompt'; }, 2000);
-  } catch {
-    alert('Failed to copy prompt.');
-  }
-});
-
-function renderAIDigest(stats) {
-  const digest = generateAIDigest(stats);
-  aiPromptPreview.textContent = digest.promptText;
-}
-
 function updateTicker() {
   if (currentActive && currentActive.start_utc) {
     const elapsed = Math.max(0, Date.now() - currentActive.start_utc);
@@ -461,22 +448,6 @@ function updateTicker() {
     currentTimer.textContent = '00:00:00';
   }
 }
-
-// Copy AI Digest Button
-btnCopyAi.addEventListener('click', async () => {
-  const text = aiPromptPreview.textContent;
-  try {
-    await navigator.clipboard.writeText(text);
-    btnCopyAi.classList.add('copied');
-    copyBtnText.textContent = 'Copied!';
-    setTimeout(() => {
-      btnCopyAi.classList.remove('copied');
-      copyBtnText.textContent = 'Copy for AI';
-    }, 2000);
-  } catch {
-    alert('Failed to copy to clipboard.');
-  }
-});
 
 // Export JSON
 btnExportJson.addEventListener('click', () => {

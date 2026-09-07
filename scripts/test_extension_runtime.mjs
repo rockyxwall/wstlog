@@ -194,11 +194,11 @@ async function run() {
     console.log('Simulating UI interactions...');
     const actions = [
       "document.getElementById('tab-categories')?.click()",
-      "document.getElementById('tab-ai')?.click()",
       "document.getElementById('tab-overview')?.click()",
+      "document.getElementById('btn-settings')?.click()",
       "document.getElementById('btn-prev-day')?.click()",
       "document.getElementById('btn-next-day')?.click()",
-      "document.querySelectorAll('.drilldown-header').forEach(h => h.click())"
+      "document.querySelectorAll('.btn-pages-toggle').forEach(b => b.click())"
     ];
 
     for (const act of actions) {

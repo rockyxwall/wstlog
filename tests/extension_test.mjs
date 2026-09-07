@@ -127,8 +127,20 @@ for (const file of scripts) {
   console.log(`  PASS: ${file} parsed successfully`);
 }
 
-// 4. Content Security Policy (CSP) Check
-console.log('\n[4/4] Verifying CSP compliance (no inline on* event handlers)...');
+// 4. Content Security Policy (CSP) & Layout Integrity Check
+console.log('\n[4/4] Verifying CSP compliance and 2-tab layout integrity...');
+const popupHtml = fs.readFileSync('extension/popup.html', 'utf8');
+
+// Ensure 2 tabs, settings popover, and zero AI prompt bloat
+assert.ok(popupHtml.includes('id="tab-overview"'), 'Overview tab must exist');
+assert.ok(popupHtml.includes('id="tab-categories"'), 'Categories tab must exist');
+assert.equal(popupHtml.includes('id="tab-ai"'), false, 'AI tab must be removed');
+assert.ok(popupHtml.includes('id="btn-settings"'), 'Settings button must exist in header');
+assert.ok(popupHtml.includes('id="settings-popover"'), 'Settings popover must exist');
+assert.equal(popupHtml.includes('id="ai-sort-preview"'), false, 'AI sort prompt must be removed');
+assert.equal(popupHtml.includes('id="ai-prompt-preview"'), false, 'AI digest prompt must be removed');
+console.log('  PASS: DOM layout verified (2 primary tabs, settings popover, zero prompt bloat)');
+
 const allExtensionFiles = [
   'extension/popup.html',
   'extension/popup.js',
