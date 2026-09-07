@@ -1,59 +1,76 @@
-// Standalone Browser Activity Tracker Popup Logic (v0.0.1)
+// ACTLog Standalone Activity Tracker — Popup Logic (v0.0.1)
+// Ponytail: pure vanilla JS, zero libraries, backward-compatible
 
 let cachedSessions = [];
 let currentActive = null;
 let liveTicker = null;
+let selectedDateMs = getMidnight(new Date());
 
-// Tab switcher
+function getMidnight(d) {
+  const date = new Date(d);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+// DOM Elements
 const tabOverview = document.getElementById('tab-overview');
-const tabLogs = document.getElementById('tab-logs');
-const viewOverview = document.getElementById('view-overview');
-const viewLogs = document.getElementById('view-logs');
-const logCountBadge = document.getElementById('log-count-badge');
+const tabCategories = document.getElementById('tab-categories');
+const tabAi = document.getElementById('tab-ai');
 
-// Overview elements
+const viewOverview = document.getElementById('view-overview');
+const viewCategories = document.getElementById('view-categories');
+const viewAi = document.getElementById('view-ai');
+
+// Date Nav
+const btnPrevDay = document.getElementById('btn-prev-day');
+const btnNextDay = document.getElementById('btn-next-day');
+const currentDateLabel = document.getElementById('current-date-label');
+
+// Overview Elements
 const currentBadge = document.getElementById('current-badge');
 const currentDomain = document.getElementById('current-domain');
 const currentTitle = document.getElementById('current-title');
 const currentTimer = document.getElementById('current-timer');
+const audioBadge = document.getElementById('audio-badge');
 
-const metricTodayTime = document.getElementById('metric-today-time');
-const metricDomainCount = document.getElementById('metric-domain-count');
-const metricSessionCount = document.getElementById('metric-session-count');
-const domainBreakdownList = document.getElementById('domain-breakdown-list');
+const metricActiveTime = document.getElementById('metric-active-time');
+const metricIdleTime = document.getElementById('metric-idle-time');
+const metricFocusScore = document.getElementById('metric-focus-score');
+const timelineContainer = document.getElementById('timeline-container');
+const overviewDomainList = document.getElementById('overview-domain-list');
 
-// Logs elements
-const logSearchInput = document.getElementById('log-search-input');
+// Categories Elements
+const categoryBarsList = document.getElementById('category-bars-list');
+const drilldownDomainList = document.getElementById('drilldown-domain-list');
+
+// AI Digest Elements
+const aiPromptPreview = document.getElementById('ai-prompt-preview');
+const btnCopyAi = document.getElementById('btn-copy-ai');
+const copyBtnText = document.getElementById('copy-btn-text');
 const btnExportJson = document.getElementById('btn-export-json');
 const btnClearLogs = document.getElementById('btn-clear-logs');
-const logsContainer = document.getElementById('logs-container');
 const storageStatus = document.getElementById('storage-status');
 
-// Format helpers
+// Helper formatters
 function formatDuration(ms) {
-  if (!ms || ms < 0) return '0s';
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
+  if (!ms || ms < 0) return '0m';
+  const totalSecs = Math.floor(ms / 1000);
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
 
-  if (hours > 0) return `${hours}h ${minutes.toString().padStart(2, '0')}m`;
-  if (minutes > 0) return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
-  return `${seconds}s`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
 }
 
 function formatTickerTime(ms) {
   if (!ms || ms < 0) return '00:00:00';
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function formatTimestamp(ts) {
-  const d = new Date(ts);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const totalSecs = Math.floor(ms / 1000);
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
 function getDomainAbbr(domain) {
@@ -62,96 +79,168 @@ function getDomainAbbr(domain) {
   return clean.slice(0, 2).toUpperCase();
 }
 
-// Navigation Tab Switcher
-tabOverview.addEventListener('click', () => {
-  tabOverview.classList.add('active');
-  tabLogs.classList.remove('active');
-  viewOverview.classList.remove('hidden');
-  viewLogs.classList.add('hidden');
+function updateDateLabel() {
+  const today = getMidnight(new Date());
+  const yesterday = today - 86400000;
+
+  if (selectedDateMs === today) {
+    currentDateLabel.textContent = 'Today';
+    btnNextDay.disabled = true;
+  } else if (selectedDateMs === yesterday) {
+    currentDateLabel.textContent = 'Yesterday';
+    btnNextDay.disabled = false;
+  } else {
+    currentDateLabel.textContent = new Date(selectedDateMs).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric'
+    });
+    btnNextDay.disabled = false;
+  }
+}
+
+// Tab Switching
+function switchTab(targetViewId, activeTabBtn) {
+  [viewOverview, viewCategories, viewAi].forEach(view => {
+    view.classList.toggle('hidden', view.id !== targetViewId);
+  });
+  [tabOverview, tabCategories, tabAi].forEach(tab => {
+    tab.classList.toggle('active', tab === activeTabBtn);
+  });
+  renderAllViews();
+}
+
+tabOverview.addEventListener('click', () => switchTab('view-overview', tabOverview));
+tabCategories.addEventListener('click', () => switchTab('view-categories', tabCategories));
+tabAi.addEventListener('click', () => switchTab('view-ai', tabAi));
+
+// Date Nav Listeners
+btnPrevDay.addEventListener('click', () => {
+  selectedDateMs -= 86400000;
+  updateDateLabel();
+  renderAllViews();
 });
 
-tabLogs.addEventListener('click', () => {
-  tabLogs.classList.add('active');
-  tabOverview.classList.remove('active');
-  viewLogs.classList.remove('hidden');
-  viewOverview.classList.add('hidden');
-  renderLogs(logSearchInput.value.trim());
+btnNextDay.addEventListener('click', () => {
+  const today = getMidnight(new Date());
+  if (selectedDateMs < today) {
+    selectedDateMs += 86400000;
+    updateDateLabel();
+    renderAllViews();
+  }
 });
 
-// Load and render data from chrome.storage.local
+// Load storage data
 async function loadData() {
   const store = await chrome.storage.local.get(['current_active', 'sessions']);
   cachedSessions = Array.isArray(store.sessions) ? store.sessions : [];
   currentActive = store.current_active || null;
 
-  logCountBadge.textContent = cachedSessions.length.toString();
-  storageStatus.textContent = `${cachedSessions.length} sessions stored`;
-
-  renderOverview();
-  if (!viewLogs.classList.contains('hidden')) {
-    renderLogs(logSearchInput.value.trim());
-  }
+  storageStatus.textContent = `${cachedSessions.length} total sessions`;
+  renderAllViews();
 }
 
-function renderOverview() {
-  // 1. Render Current Tab
+function renderAllViews() {
+  const todayMidnight = getMidnight(new Date());
+  const isSelectedToday = selectedDateMs === todayMidnight;
+
+  // Build temporary session list including current active tab if today
+  const daySessions = [...cachedSessions];
+  if (isSelectedToday && currentActive && currentActive.start_utc) {
+    daySessions.push({
+      id: 'current_active_temp',
+      type: 'active',
+      domain: currentActive.domain,
+      url: currentActive.url,
+      title: currentActive.title,
+      start_utc: currentActive.start_utc,
+      end_utc: Date.now(),
+      duration_ms: Math.max(0, Date.now() - currentActive.start_utc),
+      is_audible: currentActive.is_audible
+    });
+  }
+
+  // Aggregate day stats via digest.js
+  const stats = aggregateDayStats(daySessions, selectedDateMs);
+
+  renderOverview(stats);
+  renderCategories(stats);
+  renderAIDigest(stats);
+}
+
+function renderOverview(stats) {
+  // 1. Current Active Card
   if (currentActive && currentActive.start_utc) {
     currentDomain.textContent = currentActive.domain;
     currentTitle.textContent = currentActive.title || currentActive.url;
     currentBadge.textContent = getDomainAbbr(currentActive.domain);
-    updateTicker();
+    audioBadge.classList.toggle('hidden', !currentActive.is_audible);
   } else {
     currentDomain.textContent = 'Browser Idle';
-    currentTitle.textContent = 'No active webpage focused';
+    currentTitle.textContent = 'No active page focused';
     currentBadge.textContent = 'ID';
+    audioBadge.classList.add('hidden');
     currentTimer.textContent = '00:00:00';
   }
 
-  // 2. Today's Metrics & Domain Breakdown
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const todayMidnight = startOfToday.getTime();
+  // 2. Metrics
+  metricActiveTime.textContent = formatDuration(stats.totalActiveMs);
+  metricIdleTime.textContent = formatDuration(stats.totalIdleMs);
 
-  const todaySessions = cachedSessions.filter(s => s.end_utc >= todayMidnight);
-  const domainTotals = {};
-  let totalTodayMs = 0;
+  const totalTracked = stats.totalActiveMs + stats.totalIdleMs;
+  const focusPct = totalTracked > 0 ? Math.round((stats.totalActiveMs / totalTracked) * 100) : 100;
+  metricFocusScore.textContent = `${focusPct}%`;
 
-  for (const s of todaySessions) {
-    const dur = s.duration_ms || Math.max(0, s.end_utc - s.start_utc);
-    totalTodayMs += dur;
-    domainTotals[s.domain] = (domainTotals[s.domain] || 0) + dur;
-  }
+  // 3. 24-Hour Timeline Bar
+  timelineContainer.innerHTML = stats.hourlyBuckets.map(b => {
+    const totalSlotMs = b.activeMs + b.idleMs;
+    const heightPct = Math.min(100, Math.round((totalSlotMs / 3600000) * 100));
+    const activePctOfSlot = totalSlotMs > 0 ? (b.activeMs / totalSlotMs) * 100 : 0;
 
-  // Include current active tab time if from today
-  if (currentActive && currentActive.start_utc >= todayMidnight) {
-    const activeElapsed = Math.max(0, Date.now() - currentActive.start_utc);
-    totalTodayMs += activeElapsed;
-    domainTotals[currentActive.domain] = (domainTotals[currentActive.domain] || 0) + activeElapsed;
-  }
+    // Dominant category for color
+    let topCat = 'General';
+    let maxCatMs = 0;
+    for (const [cat, ms] of Object.entries(b.categories)) {
+      if (ms > maxCatMs) {
+        maxCatMs = ms;
+        topCat = cat;
+      }
+    }
+    const catColor = getCategoryColor(topCat);
 
-  metricTodayTime.textContent = formatDuration(totalTodayMs);
-  const uniqueDomains = Object.keys(domainTotals);
-  metricDomainCount.textContent = uniqueDomains.length.toString();
-  metricSessionCount.textContent = todaySessions.length.toString();
+    const tooltip = `${b.hour.toString().padStart(2, '0')}:00 — Active: ${formatDuration(b.activeMs)}, Idle: ${formatDuration(b.idleMs)} (${topCat})`;
 
-  // Top domains list
-  const sortedDomains = uniqueDomains
-    .map(domain => ({ domain, duration: domainTotals[domain] }))
-    .sort((a, b) => b.duration - a.duration);
+    return `
+      <div class="timeline-slot" title="${tooltip}">
+        <div class="timeline-bar-fill" style="
+          height: ${Math.max(4, heightPct)}%;
+          background: ${heightPct === 0 ? 'transparent' : catColor};
+          opacity: ${heightPct === 0 ? 0.2 : 0.85};
+        "></div>
+      </div>
+    `;
+  }).join('');
 
-  if (sortedDomains.length === 0) {
-    domainBreakdownList.innerHTML = '<div class="empty-state">No browsing activity recorded today</div>';
+  // 4. Top Domains Quick List
+  if (stats.sortedDomains.length === 0) {
+    overviewDomainList.innerHTML = '<div class="empty-state">No browsing recorded for this day</div>';
   } else {
-    domainBreakdownList.innerHTML = sortedDomains.slice(0, 5).map(item => {
-      const pct = totalTodayMs > 0 ? Math.round((item.duration / totalTodayMs) * 100) : 0;
+    const top4 = stats.sortedDomains.slice(0, 4);
+    overviewDomainList.innerHTML = top4.map(item => {
+      const pct = stats.totalActiveMs > 0 ? Math.round((item.durationMs / stats.totalActiveMs) * 100) : 0;
+      const catColor = getCategoryColor(item.category);
       return `
         <div class="domain-item">
           <div class="domain-item-top">
-            <span class="domain-item-name" title="${item.domain}">${item.domain}</span>
-            <span class="domain-item-time">${formatDuration(item.duration)} (${pct}%)</span>
+            <div class="domain-name-pill">
+              <span class="domain-item-name" title="${item.domain}">${item.domain}</span>
+              <span class="category-tag" style="background: ${catColor}20; color: ${catColor}; border: 1px solid ${catColor}40;">
+                ${item.category}
+              </span>
+            </div>
+            <span class="domain-item-time">${formatDuration(item.durationMs)} (${pct}%)</span>
           </div>
           <div class="domain-progress-bg">
-            <div class="domain-progress-bar" style="width: ${pct}%;"></div>
+            <div class="domain-progress-bar" style="width: ${pct}%; background: ${catColor};"></div>
           </div>
         </div>
       `;
@@ -159,40 +248,64 @@ function renderOverview() {
   }
 }
 
-function renderLogs(filterText = '') {
-  const query = filterText.toLowerCase();
-  const filtered = cachedSessions.filter(s => {
-    if (!query) return true;
-    return (
-      (s.domain && s.domain.toLowerCase().includes(query)) ||
-      (s.title && s.title.toLowerCase().includes(query)) ||
-      (s.url && s.url.toLowerCase().includes(query))
-    );
-  });
+function renderCategories(stats) {
+  // Category Bars
+  const catEntries = Object.entries(stats.categories).sort((a, b) => b[1] - a[1]);
 
-  if (filtered.length === 0) {
-    logsContainer.innerHTML = '<div class="empty-state">No matching sessions found</div>';
-    return;
+  if (catEntries.length === 0) {
+    categoryBarsList.innerHTML = '<div class="empty-state">No category activity recorded</div>';
+  } else {
+    categoryBarsList.innerHTML = catEntries.map(([name, ms]) => {
+      const pct = stats.totalActiveMs > 0 ? Math.round((ms / stats.totalActiveMs) * 100) : 0;
+      const color = getCategoryColor(name);
+      return `
+        <div class="category-row">
+          <div class="category-row-top">
+            <span class="category-name" style="color: ${color};">${name}</span>
+            <span class="category-time">${formatDuration(ms)} (${pct}%)</span>
+          </div>
+          <div class="domain-progress-bg">
+            <div class="domain-progress-bar" style="width: ${pct}%; background: ${color};"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
-  // Show newest first
-  const displayList = filtered.slice().reverse();
+  // Domain Drilldown Accordion
+  if (stats.sortedDomains.length === 0) {
+    drilldownDomainList.innerHTML = '<div class="empty-state">No domain logs available</div>';
+  } else {
+    drilldownDomainList.innerHTML = stats.sortedDomains.map(d => {
+      const catColor = getCategoryColor(d.category);
+      const pagesHtml = d.pageTitles.length > 0
+        ? d.pageTitles.map(p => `<div class="page-title-entry" title="${p}">&bull; ${p}</div>`).join('')
+        : '<div class="page-title-entry">&bull; Active page visits</div>';
 
-  logsContainer.innerHTML = displayList.map(s => {
-    const dur = s.duration_ms || Math.max(0, s.end_utc - s.start_utc);
-    return `
-      <div class="log-entry">
-        <div class="log-main">
-          <div class="log-domain-row">
-            <span class="log-domain">${s.domain}</span>
-            <span class="log-time-stamp">${formatTimestamp(s.start_utc)} - ${formatTimestamp(s.end_utc)}</span>
+      return `
+        <div class="drilldown-item">
+          <div class="drilldown-header" onclick="this.parentElement.classList.toggle('open')">
+            <div class="drilldown-title-wrap">
+              <span class="caret-icon">&#9654;</span>
+              <span class="domain-item-name" title="${d.domain}">${d.domain}</span>
+              <span class="category-tag" style="background: ${catColor}20; color: ${catColor};">
+                ${d.category}
+              </span>
+            </div>
+            <span class="domain-item-time">${formatDuration(d.durationMs)}</span>
           </div>
-          <div class="log-title" title="${s.title || s.url}">${s.title || s.url}</div>
+          <div class="drilldown-pages">
+            ${pagesHtml}
+          </div>
         </div>
-        <span class="log-dur">${formatDuration(dur)}</span>
-      </div>
-    `;
-  }).join('');
+      `;
+    }).join('');
+  }
+}
+
+function renderAIDigest(stats) {
+  const digest = generateAIDigest(stats);
+  aiPromptPreview.textContent = digest.promptText;
 }
 
 function updateTicker() {
@@ -204,9 +317,20 @@ function updateTicker() {
   }
 }
 
-// Search input listener
-logSearchInput.addEventListener('input', (e) => {
-  renderLogs(e.target.value.trim());
+// Copy AI Digest Button
+btnCopyAi.addEventListener('click', async () => {
+  const text = aiPromptPreview.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    btnCopyAi.classList.add('copied');
+    copyBtnText.textContent = 'Copied!';
+    setTimeout(() => {
+      btnCopyAi.classList.remove('copied');
+      copyBtnText.textContent = 'Copy for AI';
+    }, 2000);
+  } catch (err) {
+    alert('Failed to copy to clipboard.');
+  }
 });
 
 // Export JSON
@@ -218,30 +342,37 @@ btnExportJson.addEventListener('click', () => {
   const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(cachedSessions, null, 2));
   const downloadAnchor = document.createElement('a');
   downloadAnchor.setAttribute('href', dataStr);
-  downloadAnchor.setAttribute('download', `actlog-browser-logs-${new Date().toISOString().slice(0, 10)}.json`);
+  downloadAnchor.setAttribute('download', `actlog-activity-${new Date().toISOString().slice(0, 10)}.json`);
   document.body.appendChild(downloadAnchor);
   downloadAnchor.click();
   downloadAnchor.remove();
 });
 
-// Clear Logs
+// Clear Selected Day's Logs
 btnClearLogs.addEventListener('click', async () => {
-  if (confirm('Are you sure you want to clear all stored browser activity logs?')) {
-    await chrome.storage.local.set({ sessions: [] });
-    cachedSessions = [];
-    logCountBadge.textContent = '0';
-    storageStatus.textContent = '0 sessions stored';
-    renderOverview();
-    renderLogs();
+  const dateStr = new Date(selectedDateMs).toLocaleDateString();
+  if (confirm(`Clear all activity logs recorded for ${dateStr}?`)) {
+    const dayStart = selectedDateMs;
+    const dayEnd = dayStart + 86400000;
+
+    const remaining = cachedSessions.filter(s => {
+      const sStart = s.start_utc;
+      const sEnd = s.end_utc || sStart;
+      return sEnd <= dayStart || sStart >= dayEnd;
+    });
+
+    await chrome.storage.local.set({ sessions: remaining });
+    cachedSessions = remaining;
+    renderAllViews();
   }
 });
 
-// Auto refresh on load and storage updates
+// Initialization
 window.addEventListener('DOMContentLoaded', () => {
+  updateDateLabel();
   loadData();
   liveTicker = setInterval(() => {
     updateTicker();
-    // Also periodically reload to catch new sessions
     loadData();
   }, 1000);
 });

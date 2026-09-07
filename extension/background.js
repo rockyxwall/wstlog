@@ -1,6 +1,41 @@
 // ACTLog Standalone Browser Activity Tracker (v0.0.1)
+// Ponytail: native Chrome APIs, sequential async lock, AFK audio bypass, crash recovery
+
 const HEARTBEAT_ALARM = 'actlog_heartbeat_alarm';
-const MIN_SESSION_DURATION_MS = 1000; // Ignore under 1s to prevent bounce bloat
+const IDLE_DETECTION_SECONDS = 120; // 2 minutes
+const MAX_UNATTENDED_MEDIA_MS = 4 * 60 * 60 * 1000; // 4 hours cap on unattended audio
+const MIN_SESSION_DURATION_MS = 1000; // Ignore micro-glitches under 1s
+
+// Sequential Promise Queue: guarantees atomic storage read-modify-write without race conditions
+let queue = Promise.resolve();
+function enqueue(task) {
+  queue = queue.then(task).catch(err => console.debug('[ACTLog background] Queue task error:', err));
+  return queue;
+}
+
+// Strip noisy tracking params from URLs to save storage space and protect privacy
+function sanitizeUrl(rawUrl) {
+  if (!rawUrl) return '';
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
+      return `${url.protocol}//${url.hostname || url.pathname}`;
+    }
+    const trackingPrefixes = ['utm_', 'fbclid', 'gclid', 'ref', 'source', 'token', 'session'];
+    const searchParams = new URLSearchParams(url.search);
+    const toDelete = [];
+    for (const key of searchParams.keys()) {
+      if (trackingPrefixes.some(prefix => key.toLowerCase().startsWith(prefix))) {
+        toDelete.push(key);
+      }
+    }
+    toDelete.forEach(k => searchParams.delete(k));
+    url.search = searchParams.toString();
+    return url.toString();
+  } catch {
+    return rawUrl.slice(0, 120);
+  }
+}
 
 function extractDomain(rawUrl) {
   if (!rawUrl) return 'Internal';
@@ -15,7 +50,7 @@ function extractDomain(rawUrl) {
   }
 }
 
-// Flush currently active session into stored sessions array
+// Finalize active tab session into persistent store
 async function finalizeActiveSession(reason = 'switch') {
   const store = await chrome.storage.local.get(['current_active', 'sessions']);
   const active = store.current_active;
@@ -24,10 +59,10 @@ async function finalizeActiveSession(reason = 'switch') {
   const now = Date.now();
   const duration = Math.max(0, now - active.start_utc);
 
-  // Commit if greater than minimal threshold
   if (duration >= MIN_SESSION_DURATION_MS) {
     const sessionRecord = {
       id: crypto.randomUUID(),
+      type: 'active',
       domain: active.domain,
       url: active.url,
       title: active.title || active.domain,
@@ -35,13 +70,13 @@ async function finalizeActiveSession(reason = 'switch') {
       end_utc: now,
       duration_ms: duration,
       favIconUrl: active.favIconUrl || '',
+      is_audible: !!active.is_audible,
       reason: reason
     };
 
     const sessions = Array.isArray(store.sessions) ? store.sessions : [];
     sessions.push(sessionRecord);
 
-    // Keep up to 50,000 clean session records locally
     if (sessions.length > 50000) {
       sessions.splice(0, sessions.length - 50000);
     }
@@ -51,36 +86,88 @@ async function finalizeActiveSession(reason = 'switch') {
       current_active: null
     });
   } else {
-    // Transient switch < 1s, discard active without bloat
     await chrome.storage.local.set({ current_active: null });
   }
 }
 
-// Start tracking a new active tab session
+// Finalize idle / AFK session into persistent store
+async function finalizeIdleSession() {
+  const store = await chrome.storage.local.get(['current_idle', 'sessions']);
+  const idle = store.current_idle;
+  if (!idle || !idle.start_utc) return;
+
+  const now = Date.now();
+  const duration = Math.max(0, now - idle.start_utc);
+
+  if (duration >= 5000) { // Keep idle sessions > 5s
+    const idleRecord = {
+      id: crypto.randomUUID(),
+      type: 'idle',
+      domain: 'Idle / Away',
+      url: '',
+      title: 'User inactive (AFK)',
+      start_utc: idle.start_utc,
+      end_utc: now,
+      duration_ms: duration,
+      reason: idle.reason || 'idle'
+    };
+
+    const sessions = Array.isArray(store.sessions) ? store.sessions : [];
+    sessions.push(idleRecord);
+
+    if (sessions.length > 50000) {
+      sessions.splice(0, sessions.length - 50000);
+    }
+
+    await chrome.storage.local.set({
+      sessions: sessions,
+      current_idle: null
+    });
+  } else {
+    await chrome.storage.local.set({ current_idle: null });
+  }
+}
+
+// Start tracking idle session
+async function startIdleSession(reason = 'idle') {
+  await finalizeActiveSession(reason);
+  const now = Date.now();
+  const newIdle = {
+    start_utc: now,
+    last_tick_utc: now,
+    reason: reason
+  };
+  await chrome.storage.local.set({ current_idle: newIdle });
+}
+
+// Start tracking active tab session
 async function startActiveSession(tab) {
   if (!tab || !tab.id || !tab.url) return;
 
-  // Finalize any previous session before starting new one
+  await finalizeIdleSession();
   await finalizeActiveSession('tab_change');
 
   const domain = extractDomain(tab.url);
+  const cleanUrl = sanitizeUrl(tab.url);
   const now = Date.now();
 
   const newActive = {
     tabId: tab.id,
     windowId: tab.windowId,
-    url: tab.url,
+    url: cleanUrl,
     domain: domain,
     title: tab.title || domain,
     start_utc: now,
     last_tick_utc: now,
+    last_active_input_utc: now,
+    is_audible: !!tab.audible,
     favIconUrl: tab.favIconUrl || ''
   };
 
   await chrome.storage.local.set({ current_active: newActive });
 }
 
-// Refresh current active tab from Chrome query
+// Check and transition active tab state
 async function checkActiveTab() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
@@ -92,10 +179,12 @@ async function checkActiveTab() {
 
     const store = await chrome.storage.local.get(['current_active']);
     const active = store.current_active;
+    const cleanUrl = sanitizeUrl(tab.url);
 
-    // If still on the same tab and URL, just update heartbeat tick
-    if (active && active.tabId === tab.id && active.url === tab.url) {
+    // If still on the same tab and URL, update heartbeat tick and audio state
+    if (active && active.tabId === tab.id && active.url === cleanUrl) {
       active.last_tick_utc = Date.now();
+      active.is_audible = !!tab.audible;
       if (tab.title && tab.title !== active.title) {
         active.title = tab.title;
       }
@@ -103,72 +192,179 @@ async function checkActiveTab() {
       return;
     }
 
-    // Otherwise transition to new active tab
     await startActiveSession(tab);
   } catch (err) {
     console.debug('[ACTLog background] checkActiveTab error:', err);
   }
 }
 
-// Chrome Event Listeners
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
+// Crash Recovery: commit orphaned sessions from sudden close or crash
+async function recoverDanglingSessions() {
   try {
-    const tab = await chrome.tabs.get(activeInfo.tabId);
-    await startActiveSession(tab);
-  } catch (err) {
-    console.debug(err);
-  }
-});
+    const store = await chrome.storage.local.get(['current_active', 'current_idle', 'sessions']);
+    const sessions = Array.isArray(store.sessions) ? store.sessions : [];
+    let modified = false;
 
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  // Only trigger when URL or title changes on the active tab
-  if (!tab.active) return;
-  if (changeInfo.url || (changeInfo.title && changeInfo.status === 'complete')) {
-    await startActiveSession(tab);
-  }
-});
-
-chrome.tabs.onRemoved.addListener(async (tabId) => {
-  const store = await chrome.storage.local.get(['current_active']);
-  if (store.current_active && store.current_active.tabId === tabId) {
-    await finalizeActiveSession('tab_closed');
-  }
-});
-
-chrome.windows.onFocusChanged.addListener(async (windowId) => {
-  if (windowId === chrome.windows.WINDOW_ID_NONE) {
-    // Chrome lost OS focus
-    await finalizeActiveSession('window_blur');
-  } else {
-    await checkActiveTab();
-  }
-});
-
-chrome.idle.onStateChanged.addListener(async (newState) => {
-  if (newState === 'idle' || newState === 'locked') {
-    await finalizeActiveSession(`idle_${newState}`);
-  } else if (newState === 'active') {
-    await checkActiveTab();
-  }
-});
-
-// Periodic alarm (1 min) to update current active session heartbeat
-chrome.runtime.onInstalled.addListener(async () => {
-  chrome.alarms.create(HEARTBEAT_ALARM, { periodInMinutes: 1 });
-  await checkActiveTab();
-});
-
-chrome.runtime.onStartup.addListener(async () => {
-  chrome.alarms.create(HEARTBEAT_ALARM, { periodInMinutes: 1 });
-  await checkActiveTab();
-});
-
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === HEARTBEAT_ALARM) {
-    const store = await chrome.storage.local.get(['current_active']);
-    if (store.current_active) {
-      store.current_active.last_tick_utc = Date.now();
-      await chrome.storage.local.set({ current_active: store.current_active });
+    if (store.current_active && store.current_active.start_utc) {
+      const active = store.current_active;
+      const end = active.last_tick_utc || active.start_utc;
+      const dur = Math.max(0, end - active.start_utc);
+      if (dur >= MIN_SESSION_DURATION_MS) {
+        sessions.push({
+          id: crypto.randomUUID(),
+          type: 'active',
+          domain: active.domain,
+          url: active.url,
+          title: active.title || active.domain,
+          start_utc: active.start_utc,
+          end_utc: end,
+          duration_ms: dur,
+          favIconUrl: active.favIconUrl || '',
+          reason: 'recovered_on_startup'
+        });
+      }
+      modified = true;
     }
+
+    if (store.current_idle && store.current_idle.start_utc) {
+      const idle = store.current_idle;
+      const end = idle.last_tick_utc || idle.start_utc;
+      const dur = Math.max(0, end - idle.start_utc);
+      if (dur >= 5000) {
+        sessions.push({
+          id: crypto.randomUUID(),
+          type: 'idle',
+          domain: 'Idle / Away',
+          url: '',
+          title: 'User inactive (AFK)',
+          start_utc: idle.start_utc,
+          end_utc: end,
+          duration_ms: dur,
+          reason: 'recovered_on_startup'
+        });
+      }
+      modified = true;
+    }
+
+    if (modified) {
+      await chrome.storage.local.set({
+        sessions: sessions,
+        current_active: null,
+        current_idle: null
+      });
+    }
+  } catch (err) {
+    console.debug('[ACTLog background] recoverDanglingSessions error:', err);
   }
+}
+
+// Chrome Event Listeners
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  enqueue(async () => {
+    try {
+      const tab = await chrome.tabs.get(activeInfo.tabId);
+      await startActiveSession(tab);
+    } catch (err) {
+      console.debug(err);
+    }
+  });
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (!tab.active) return;
+  if (changeInfo.url || (changeInfo.title && changeInfo.status === 'complete') || changeInfo.audible !== undefined) {
+    enqueue(async () => {
+      await startActiveSession(tab);
+    });
+  }
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  enqueue(async () => {
+    const store = await chrome.storage.local.get(['current_active']);
+    if (store.current_active && store.current_active.tabId === tabId) {
+      await finalizeActiveSession('tab_closed');
+    }
+  });
+});
+
+chrome.windows.onFocusChanged.addListener((windowId) => {
+  enqueue(async () => {
+    if (windowId === chrome.windows.WINDOW_ID_NONE) {
+      await finalizeActiveSession('window_blur');
+    } else {
+      await checkActiveTab();
+    }
+  });
+});
+
+chrome.idle.onStateChanged.addListener((newState) => {
+  enqueue(async () => {
+    if (newState === 'idle' || newState === 'locked') {
+      const store = await chrome.storage.local.get(['current_active']);
+      const active = store.current_active;
+
+      // Check for active media bypass (audio playing)
+      if (active && active.tabId && newState === 'idle') {
+        try {
+          const tab = await chrome.tabs.get(active.tabId);
+          const now = Date.now();
+          const timeSinceInput = now - (active.last_active_input_utc || active.start_utc);
+
+          // If playing audio and under 4 hours cap, keep active
+          if (tab && tab.audible && timeSinceInput < MAX_UNATTENDED_MEDIA_MS) {
+            active.is_audible = true;
+            active.last_tick_utc = now;
+            await chrome.storage.local.set({ current_active: active });
+            return;
+          }
+        } catch (err) {
+          // Tab may be gone
+        }
+      }
+
+      // Transition to idle
+      await startIdleSession(`idle_${newState}`);
+    } else if (newState === 'active') {
+      await finalizeIdleSession();
+      await checkActiveTab();
+    }
+  });
+});
+
+// Periodic heartbeat alarm
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === HEARTBEAT_ALARM) {
+    enqueue(async () => {
+      const now = Date.now();
+      const store = await chrome.storage.local.get(['current_active', 'current_idle']);
+      if (store.current_active) {
+        store.current_active.last_tick_utc = now;
+        await chrome.storage.local.set({ current_active: store.current_active });
+      }
+      if (store.current_idle) {
+        store.current_idle.last_tick_utc = now;
+        await chrome.storage.local.set({ current_idle: store.current_idle });
+      }
+    });
+  }
+});
+
+// Init & Startup
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.idle.setDetectionInterval(IDLE_DETECTION_SECONDS);
+  chrome.alarms.create(HEARTBEAT_ALARM, { periodInMinutes: 1 });
+  enqueue(async () => {
+    await recoverDanglingSessions();
+    await checkActiveTab();
+  });
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  chrome.idle.setDetectionInterval(IDLE_DETECTION_SECONDS);
+  chrome.alarms.create(HEARTBEAT_ALARM, { periodInMinutes: 1 });
+  enqueue(async () => {
+    await recoverDanglingSessions();
+    await checkActiveTab();
+  });
 });

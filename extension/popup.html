@@ -3,100 +3,162 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ACTLog Browser Tracker</title>
+  <title>ACTLog Activity Tracker</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <!-- Header -->
+  <!-- Header with Brand and Day Navigation -->
   <header class="app-header">
     <div class="brand">
       <div class="logo-dot"></div>
       <span class="brand-title">ACTLog</span>
-      <span class="version-tag">v0.0.1</span>
+      <span class="brand-badge">Tracker</span>
     </div>
-    <div class="status-indicator">
-      <span class="status-dot online"></span>
-      <span class="status-text">Standalone</span>
+    <!-- Date Switcher -->
+    <div class="date-navigator">
+      <button class="btn-nav" id="btn-prev-day" title="Previous day">&lsaquo;</button>
+      <span class="date-label" id="current-date-label">Today</span>
+      <button class="btn-nav" id="btn-next-day" title="Next day" disabled>&rsaquo;</button>
     </div>
   </header>
 
   <!-- Navigation Tabs -->
   <nav class="nav-tabs">
     <button class="nav-tab active" id="tab-overview" data-view="view-overview">Overview</button>
-    <button class="nav-tab" id="tab-logs" data-view="view-logs">Full Logs (<span id="log-count-badge">0</span>)</button>
+    <button class="nav-tab" id="tab-categories" data-view="view-categories">Categories</button>
+    <button class="nav-tab" id="tab-ai" data-view="view-ai">AI Digest</button>
   </nav>
 
   <!-- Main Content Views -->
   <main class="app-main">
     <!-- View 1: Overview -->
     <div class="view-panel" id="view-overview">
-      <!-- Active Tab Card -->
+      <!-- Active Browsing Card -->
       <section class="card current-card">
-        <div class="card-label">CURRENTLY BROWSING</div>
+        <div class="card-header-mini">
+          <span class="card-label">CURRENTLY BROWSING</span>
+          <span class="live-pulse" id="live-indicator">LIVE</span>
+        </div>
         <div class="active-app-row">
           <div class="app-icon-badge" id="current-badge">--</div>
           <div class="active-meta">
-            <div class="app-name" id="current-domain">Detecting active tab...</div>
+            <div class="app-name-row">
+              <span class="app-name" id="current-domain">Detecting tab...</span>
+              <span class="audio-badge hidden" id="audio-badge" title="Media Playing">AUDIO</span>
+            </div>
             <div class="window-title" id="current-title">-</div>
           </div>
         </div>
         <div class="live-ticker-row">
-          <span class="ticker-label">Active on this page:</span>
+          <span class="ticker-label">Time on current page:</span>
           <span class="ticker-value" id="current-timer">00:00:00</span>
         </div>
       </section>
 
-      <!-- Today's Metrics -->
+      <!-- Key Focus Metrics -->
       <section class="metrics-grid">
         <div class="metric-box">
-          <span class="metric-label">Today's Browser Time</span>
-          <span class="metric-value" id="metric-today-time">0m</span>
+          <span class="metric-label">Active Time</span>
+          <span class="metric-value text-accent" id="metric-active-time">0m</span>
         </div>
         <div class="metric-box">
-          <span class="metric-label">Domains Visited</span>
-          <span class="metric-value" id="metric-domain-count">0</span>
+          <span class="metric-label">Idle / AFK</span>
+          <span class="metric-value text-muted-val" id="metric-idle-time">0m</span>
         </div>
         <div class="metric-box">
-          <span class="metric-label">Clean Sessions</span>
-          <span class="metric-value" id="metric-session-count">0</span>
+          <span class="metric-label">Focus Score</span>
+          <span class="metric-value text-success" id="metric-focus-score">100%</span>
         </div>
       </section>
 
-      <!-- Top Domains Breakdown -->
+      <!-- 24-Hour Timeline Bar -->
+      <section class="card timeline-card">
+        <div class="section-header">
+          <span class="section-title">24-Hour Focus Timeline</span>
+          <span class="timeline-legend-hint">Hover for details</span>
+        </div>
+        <div class="timeline-bar-container" id="timeline-container">
+          <!-- 24 hour slot columns rendered via JS -->
+        </div>
+        <div class="timeline-hours-axis">
+          <span>00:00</span>
+          <span>06:00</span>
+          <span>12:00</span>
+          <span>18:00</span>
+          <span>23:59</span>
+        </div>
+      </section>
+
+      <!-- Top Domains Quick List -->
       <section class="card section-card">
         <div class="section-header">
-          <span class="section-title">Today's Domain Activity</span>
+          <span class="section-title">Top Activity Today</span>
         </div>
-        <div class="domain-list" id="domain-breakdown-list">
-          <div class="empty-state">No browsing activity recorded today</div>
+        <div class="domain-list" id="overview-domain-list">
+          <div class="empty-state">No browsing recorded for this day</div>
         </div>
       </section>
     </div>
 
-    <!-- View 2: Full Logs -->
-    <div class="view-panel hidden" id="view-logs">
-      <!-- Search & Actions Bar -->
-      <div class="logs-toolbar">
-        <input type="text" id="log-search-input" class="search-input" placeholder="Search domain, title, or URL...">
-        <div class="toolbar-actions">
-          <button class="btn-action" id="btn-export-json" title="Download all logs as JSON">Export JSON</button>
-          <button class="btn-action btn-danger" id="btn-clear-logs" title="Clear all local logs">Clear</button>
+    <!-- View 2: Categories & Drilldown -->
+    <div class="view-panel hidden" id="view-categories">
+      <!-- Category Distribution Cards -->
+      <section class="card section-card">
+        <div class="section-header">
+          <span class="section-title">Category Distribution</span>
         </div>
-      </div>
+        <div class="category-bars" id="category-bars-list">
+          <div class="empty-state">No category activity recorded</div>
+        </div>
+      </section>
 
-      <!-- Logs List -->
-      <div class="logs-container" id="logs-container">
-        <div class="empty-state">Loading activity logs...</div>
-      </div>
+      <!-- Domain Breakdown Accordion -->
+      <section class="card section-card">
+        <div class="section-header">
+          <span class="section-title">Domain Drilldown</span>
+          <span class="section-subtext">Click domain to view pages</span>
+        </div>
+        <div class="drilldown-list" id="drilldown-domain-list">
+          <div class="empty-state">No domain logs available</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- View 3: AI Digest -->
+    <div class="view-panel hidden" id="view-ai">
+      <section class="card ai-card">
+        <div class="ai-header">
+          <div class="ai-title-wrap">
+            <span class="ai-tag">PREVIEW</span>
+            <span class="ai-heading">Daily Activity Digest</span>
+          </div>
+          <button class="btn-copy-ai" id="btn-copy-ai" title="Copy formatted prompt for AI">
+            <span id="copy-btn-text">Copy for AI</span>
+          </button>
+        </div>
+        <p class="ai-desc">Token-efficient context ready for Gemini, Claude, or ChatGPT summarization:</p>
+        <pre class="ai-prompt-preview" id="ai-prompt-preview">Generating summary...</pre>
+      </section>
+
+      <section class="card section-card">
+        <div class="section-header">
+          <span class="section-title">Data Management</span>
+        </div>
+        <div class="export-actions">
+          <button class="btn-action" id="btn-export-json">Export Full JSON</button>
+          <button class="btn-action btn-danger" id="btn-clear-logs">Clear Day's Logs</button>
+        </div>
+      </section>
     </div>
   </main>
 
   <!-- Footer -->
   <footer class="app-footer">
-    <span class="footer-note">100% Local in chrome.storage</span>
-    <span class="footer-storage" id="storage-status">Clean logs</span>
+    <span class="footer-note">100% On-Device &bull; Private</span>
+    <span class="footer-storage" id="storage-status">0 sessions</span>
   </footer>
 
+  <script src="digest.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
