@@ -1,10 +1,13 @@
-// ACTLog Standalone Activity Tracker — Popup Logic (v0.0.1)
+// ACTLog Standalone Activity Tracker — Popup Logic (v0.0.2)
 // Ponytail: pure vanilla JS, zero libraries, backward-compatible
 
 let cachedSessions = [];
 let currentActive = null;
 let liveTicker = null;
 let selectedDateMs = getMidnight(new Date());
+
+let customCategories = [];
+let domainMappings = {};
 
 function getMidnight(d) {
   const date = new Date(d);
@@ -42,6 +45,10 @@ const overviewDomainList = document.getElementById('overview-domain-list');
 // Categories Elements
 const categoryBarsList = document.getElementById('category-bars-list');
 const drilldownDomainList = document.getElementById('drilldown-domain-list');
+const inputNewCat = document.getElementById('input-new-cat');
+const btnAddCat = document.getElementById('btn-add-cat');
+const aiSortPreview = document.getElementById('ai-sort-preview');
+const btnCopySortPrompt = document.getElementById('btn-copy-sort-prompt');
 
 // AI Digest Elements
 const aiPromptPreview = document.getElementById('ai-prompt-preview');
@@ -87,6 +94,10 @@ function getDomainAbbr(domain) {
   if (!domain) return 'ID';
   const clean = domain.replace(/^www\./i, '');
   return clean.slice(0, 2).toUpperCase();
+}
+
+function getAllCategories() {
+  return [...DEFAULT_CATEGORIES, ...customCategories];
 }
 
 function updateDateLabel() {
@@ -141,9 +152,16 @@ btnNextDay.addEventListener('click', () => {
 
 // Load storage data
 async function loadData() {
-  const store = await chrome.storage.local.get(['current_active', 'sessions']);
+  const store = await chrome.storage.local.get([
+    'current_active',
+    'sessions',
+    'custom_categories',
+    'domain_mappings'
+  ]);
   cachedSessions = Array.isArray(store.sessions) ? store.sessions : [];
   currentActive = store.current_active || null;
+  customCategories = Array.isArray(store.custom_categories) ? store.custom_categories : [];
+  domainMappings = (typeof store.domain_mappings === 'object' && store.domain_mappings !== null) ? store.domain_mappings : {};
 
   storageStatus.textContent = `${cachedSessions.length} total sessions`;
   renderAllViews();
@@ -153,7 +171,6 @@ function renderAllViews() {
   const todayMidnight = getMidnight(new Date());
   const isSelectedToday = selectedDateMs === todayMidnight;
 
-  // Build temporary session list including current active tab if today
   const daySessions = [...cachedSessions];
   if (isSelectedToday && currentActive && currentActive.start_utc) {
     daySessions.push({
@@ -169,12 +186,13 @@ function renderAllViews() {
     });
   }
 
-  // Aggregate day stats via digest.js
-  const stats = aggregateDayStats(daySessions, selectedDateMs);
+  // Aggregate day stats using custom domain mappings
+  const stats = aggregateDayStats(daySessions, selectedDateMs, domainMappings);
 
   renderOverview(stats);
   renderCategories(stats);
   renderAIDigest(stats);
+  renderAISortPrompt(stats);
 }
 
 function renderOverview(stats) {
@@ -204,9 +222,7 @@ function renderOverview(stats) {
   timelineContainer.innerHTML = stats.hourlyBuckets.map(b => {
     const totalSlotMs = b.activeMs + b.idleMs;
     const heightPct = Math.min(100, Math.round((totalSlotMs / 3600000) * 100));
-    const activePctOfSlot = totalSlotMs > 0 ? (b.activeMs / totalSlotMs) * 100 : 0;
 
-    // Dominant category for color
     let topCat = 'General';
     let maxCatMs = 0;
     for (const [cat, ms] of Object.entries(b.categories)) {
@@ -215,8 +231,7 @@ function renderOverview(stats) {
         topCat = cat;
       }
     }
-    const catColor = getCategoryColor(topCat);
-
+    const catColor = getCategoryColor(topCat, customCategories);
     const tooltip = `${b.hour.toString().padStart(2, '0')}:00 — Active: ${formatDuration(b.activeMs)}, Idle: ${formatDuration(b.idleMs)} (${topCat})`;
 
     return `
@@ -237,7 +252,7 @@ function renderOverview(stats) {
     const top4 = stats.sortedDomains.slice(0, 4);
     overviewDomainList.innerHTML = top4.map(item => {
       const pct = stats.totalActiveMs > 0 ? Math.round((item.durationMs / stats.totalActiveMs) * 100) : 0;
-      const catColor = getCategoryColor(item.category);
+      const catColor = getCategoryColor(item.category, customCategories);
       const safeDomain = escapeHtml(item.domain);
       const safeCat = escapeHtml(item.category);
       return `
@@ -269,7 +284,7 @@ function renderCategories(stats) {
   } else {
     categoryBarsList.innerHTML = catEntries.map(([name, ms]) => {
       const pct = stats.totalActiveMs > 0 ? Math.round((ms / stats.totalActiveMs) * 100) : 0;
-      const color = getCategoryColor(name);
+      const color = getCategoryColor(name, customCategories);
       const safeName = escapeHtml(name);
       return `
         <div class="category-row">
@@ -285,17 +300,23 @@ function renderCategories(stats) {
     }).join('');
   }
 
-  // Domain Drilldown Accordion
+  // Domain Drilldown Accordion with Category Override Dropdowns
+  const allCats = getAllCategories();
+
   if (stats.sortedDomains.length === 0) {
     drilldownDomainList.innerHTML = '<div class="empty-state">No domain logs available</div>';
   } else {
     drilldownDomainList.innerHTML = stats.sortedDomains.map(d => {
-      const catColor = getCategoryColor(d.category);
+      const catColor = getCategoryColor(d.category, customCategories);
       const safeDomain = escapeHtml(d.domain);
-      const safeCat = escapeHtml(d.category);
       const pagesHtml = d.pageTitles.length > 0
         ? d.pageTitles.map(p => `<div class="page-title-entry" title="${escapeHtml(p)}">&bull; ${escapeHtml(p)}</div>`).join('')
         : '<div class="page-title-entry">&bull; Active page visits</div>';
+
+      const optionsHtml = allCats.map(cat => {
+        const isSel = cat === d.category ? 'selected' : '';
+        return `<option value="${escapeHtml(cat)}" ${isSel}>${escapeHtml(cat)}</option>`;
+      }).join('');
 
       return `
         <div class="drilldown-item">
@@ -303,11 +324,13 @@ function renderCategories(stats) {
             <div class="drilldown-title-wrap">
               <span class="caret-icon">&#9654;</span>
               <span class="domain-item-name" title="${safeDomain}">${safeDomain}</span>
-              <span class="category-tag" style="background: ${catColor}20; color: ${catColor};">
-                ${safeCat}
-              </span>
             </div>
-            <span class="domain-item-time">${formatDuration(d.durationMs)}</span>
+            <div class="domain-actions-wrap">
+              <select class="domain-cat-select" data-domain="${safeDomain}" title="Assign category">
+                ${optionsHtml}
+              </select>
+              <span class="domain-item-time">${formatDuration(d.durationMs)}</span>
+            </div>
           </div>
           <div class="drilldown-pages">
             ${pagesHtml}
@@ -318,11 +341,56 @@ function renderCategories(stats) {
   }
 }
 
-// Drilldown accordion click delegation
+// Category creation listener for Free users
+btnAddCat.addEventListener('click', async () => {
+  const val = inputNewCat.value.trim();
+  if (!val) return;
+  const allCats = getAllCategories();
+  if (allCats.some(c => c.toLowerCase() === val.toLowerCase())) {
+    alert('Category already exists.');
+    return;
+  }
+  customCategories.push(val);
+  await chrome.storage.local.set({ custom_categories: customCategories });
+  inputNewCat.value = '';
+  renderAllViews();
+});
+
+// Domain Category change delegation for Free users
+drilldownDomainList.addEventListener('change', async (e) => {
+  if (e.target.classList.contains('domain-cat-select')) {
+    const domain = e.target.dataset.domain;
+    const newCategory = e.target.value;
+    domainMappings[domain] = newCategory;
+    await chrome.storage.local.set({ domain_mappings: domainMappings });
+    renderAllViews();
+  }
+});
+
+// Drilldown accordion click delegation (ignore select dropdown clicks)
 drilldownDomainList.addEventListener('click', (e) => {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'OPTION') return;
   const header = e.target.closest('.drilldown-header');
   if (header && header.parentElement) {
     header.parentElement.classList.toggle('open');
+  }
+});
+
+// Render Strict AI Auto-Sort Prompt for Paid/Pro Users
+function renderAISortPrompt(stats) {
+  const visitedDomains = stats.sortedDomains.map(d => d.domain);
+  const prompt = generateAISortPrompt(visitedDomains, getAllCategories());
+  aiSortPreview.textContent = prompt;
+}
+
+btnCopySortPrompt.addEventListener('click', async () => {
+  const text = aiSortPreview.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    btnCopySortPrompt.textContent = 'Copied!';
+    setTimeout(() => { btnCopySortPrompt.textContent = 'Copy Prompt'; }, 2000);
+  } catch {
+    alert('Failed to copy prompt.');
   }
 });
 
@@ -351,7 +419,7 @@ btnCopyAi.addEventListener('click', async () => {
       btnCopyAi.classList.remove('copied');
       copyBtnText.textContent = 'Copy for AI';
     }, 2000);
-  } catch (err) {
+  } catch {
     alert('Failed to copy to clipboard.');
   }
 });

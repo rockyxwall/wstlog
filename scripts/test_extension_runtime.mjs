@@ -30,7 +30,7 @@ function findChrome() {
   }
 }
 
-const CHROME_PATH = findChrome();
+const CHROME_PATH = process.argv[2] || findChrome();
 const EXTENSION_PATH = path.resolve('extension');
 const TEMP_PROFILE = path.join(os.tmpdir(), `actlog-chrome-test-${Date.now()}`);
 const DEBUG_PORT = 9222;

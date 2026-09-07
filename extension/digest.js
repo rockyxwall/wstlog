@@ -1,5 +1,15 @@
-// ACTLog Standalone Activity Digest & Domain Classifier (v0.0.1)
+// ACTLog Standalone Activity Digest & Domain Classifier (v0.0.2)
 // Ponytail: pure native logic, zero dependencies, token-efficient AI digest generation
+
+const DEFAULT_CATEGORIES = [
+  'Development',
+  'Docs & Learning',
+  'Work & Comms',
+  'Media & Streaming',
+  'Social Media',
+  'AI & Search',
+  'General'
+];
 
 const DOMAIN_CATEGORY_RULES = [
   {
@@ -34,23 +44,43 @@ const DOMAIN_CATEGORY_RULES = [
   }
 ];
 
-function classifyDomain(domain) {
+const CUSTOM_COLORS = ['#f43f5e', '#6366f1', '#14b8a6', '#f97316', '#a855f7', '#0284c7'];
+
+function classifyDomain(domain, domainMappings = {}) {
   if (!domain || domain === 'Internal' || domain === 'Idle / Away') return 'Other';
+
+  // 1. Manual user override takes precedence
+  if (domainMappings && domainMappings[domain]) {
+    return domainMappings[domain];
+  }
+
+  // 2. Built-in regex rule
   for (const rule of DOMAIN_CATEGORY_RULES) {
     if (rule.match.test(domain)) {
       return rule.category;
     }
   }
+
+  // 3. Fallback
   return 'General';
 }
 
-function getCategoryColor(category) {
+function getCategoryColor(category, customCategories = []) {
   const found = DOMAIN_CATEGORY_RULES.find(r => r.category === category);
-  return found ? found.color : '#94a3b8';
+  if (found) return found.color;
+  if (category === 'General') return '#94a3b8';
+  if (category === 'Other') return '#64748b';
+
+  // Custom category color assignment
+  const customIdx = customCategories.indexOf(category);
+  if (customIdx >= 0) {
+    return CUSTOM_COLORS[customIdx % CUSTOM_COLORS.length];
+  }
+  return '#94a3b8';
 }
 
 // Aggregate session entries for a specific calendar day (midnight to midnight)
-function aggregateDayStats(sessions, targetDateMs) {
+function aggregateDayStats(sessions, targetDateMs, domainMappings = {}) {
   const dayStart = new Date(targetDateMs);
   dayStart.setHours(0, 0, 0, 0);
   const startMs = dayStart.getTime();
@@ -68,12 +98,10 @@ function aggregateDayStats(sessions, targetDateMs) {
   }));
 
   for (const s of sessions) {
-    // Backward compatibility: handle old records lacking 'type'
     const isIdle = s.type === 'idle' || s.domain === 'Idle / Away';
     const sStart = s.start_utc;
     const sEnd = s.end_utc || sStart;
 
-    // Check if overlaps with target day
     if (sEnd <= startMs || sStart >= endMs) continue;
 
     const clampedStart = Math.max(sStart, startMs);
@@ -88,7 +116,7 @@ function aggregateDayStats(sessions, targetDateMs) {
       totalActiveMs += clampedDuration;
 
       const domain = s.domain || 'Internal';
-      const category = s.category || classifyDomain(domain);
+      const category = classifyDomain(domain, domainMappings);
 
       categories[category] = (categories[category] || 0) + clampedDuration;
 
@@ -117,7 +145,7 @@ function aggregateDayStats(sessions, targetDateMs) {
           hourlyBuckets[h].idleMs += hOverlap;
         } else {
           hourlyBuckets[h].activeMs += hOverlap;
-          const cat = s.category || classifyDomain(s.domain);
+          const cat = classifyDomain(s.domain, domainMappings);
           hourlyBuckets[h].categories[cat] = (hourlyBuckets[h].categories[cat] || 0) + hOverlap;
         }
       }
@@ -172,7 +200,6 @@ function generateAIDigest(dayStats) {
     highlights: d.pageTitles.slice(0, 3)
   }));
 
-  // Structured Payload for future API
   const structuredData = {
     date: dateStr,
     active_minutes: activeMins,
@@ -182,7 +209,6 @@ function generateAIDigest(dayStats) {
     top_activities: topSites
   };
 
-  // Human/LLM prompt text
   let promptText = `### ACTLog Activity Digest (${dateStr})\n`;
   promptText += `- Active Time: ${Math.floor(activeMins / 60)}h ${activeMins % 60}m | Idle: ${Math.floor(idleMins / 60)}h ${idleMins % 60}m (Focus: ${focusScore}%)\n`;
 
@@ -206,4 +232,26 @@ function generateAIDigest(dayStats) {
     structured: structuredData,
     promptText: promptText
   };
+}
+
+// Strict AI Domain Classifier Prompt for Paid/Pro Users
+function generateAISortPrompt(domains, allCategories) {
+  const allowedList = allCategories.map(c => `  - "${c}"`).join('\n');
+  const domainList = JSON.stringify(domains, null, 2);
+
+  return `You are an expert web activity classification assistant.
+Task: Classify each domain in the provided list into EXACTLY ONE of the allowed categories.
+
+ALLOWED CATEGORIES:
+${allowedList}
+
+STRICT CONSTRAINTS:
+1. Return ONLY a valid, raw JSON object.
+2. DO NOT include markdown code blocks (\`\`\`json or \`\`\`).
+3. DO NOT include any introductory or concluding text, explanations, or notes.
+4. Every domain in the input list must appear as a key in the output object.
+5. The value for each key must be one of the ALLOWED CATEGORIES above.
+
+DOMAINS TO CLASSIFY:
+${domainList}`;
 }

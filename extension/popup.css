@@ -579,6 +579,64 @@ body {
   list-style: circle;
 }
 
+/* Category Creator & Domain Select */
+.category-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cat-input {
+  flex: 1;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 5px 8px;
+  color: var(--text-primary);
+  font-size: 11px;
+  outline: none;
+}
+
+.cat-input:focus {
+  border-color: var(--accent-light);
+}
+
+.domain-actions-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.domain-cat-select {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: 9px;
+  padding: 2px 4px;
+  outline: none;
+  cursor: pointer;
+  max-width: 110px;
+}
+
+.domain-cat-select:focus {
+  border-color: var(--accent-light);
+  color: var(--text-primary);
+}
+
+.btn-sm {
+  padding: 2px 8px;
+  font-size: 9px;
+}
+
+.ai-sort-card {
+  margin-top: 6px;
+}
+
+.ai-sort-preview {
+  max-height: 140px;
+}
+
 /* AI Digest View */
 .ai-card {
   background: linear-gradient(145deg, rgba(20, 30, 48, 0.8), rgba(15, 23, 42, 0.95));

@@ -15,7 +15,7 @@ const manifest = JSON.parse(manifestRaw);
 
 assert.equal(manifest.manifest_version, 3, 'Must be MV3');
 assert.ok(manifest.name, 'Must have name');
-assert.ok(manifest.version, 'Must have version');
+assert.equal(manifest.version, '0.0.2', 'Must be v0.0.2');
 assert.ok(manifest.permissions.includes('tabs'), 'Must have tabs permission');
 assert.ok(manifest.permissions.includes('storage'), 'Must have storage permission');
 assert.ok(manifest.permissions.includes('idle'), 'Must have idle permission');
@@ -28,7 +28,7 @@ assert.ok(fs.existsSync(path.join('extension', manifest.action.default_popup)), 
 for (const [size, iconPath] of Object.entries(manifest.icons)) {
   assert.ok(fs.existsSync(path.join('extension', iconPath)), `Icon ${size} must exist`);
 }
-console.log('  PASS: manifest.json is valid and all assets exist');
+console.log('  PASS: manifest.json is valid (v0.0.2) and all assets exist');
 
 // 2. Digest Engine & Classifier Testing
 console.log('\n[2/3] Validating digest.js logic...');
@@ -46,7 +46,23 @@ assert.equal(context.classifyDomain('reddit.com'), 'Social Media');
 assert.equal(context.classifyDomain('google.com'), 'AI & Search');
 assert.equal(context.classifyDomain('chatgpt.com'), 'AI & Search');
 assert.equal(context.classifyDomain('randomsite.org'), 'General');
-console.log('  PASS: classifyDomain covers all domain categories');
+
+// Test manual domain override
+assert.equal(
+  context.classifyDomain('reddit.com', { 'reddit.com': 'Docs & Learning' }),
+  'Docs & Learning',
+  'Manual override must take precedence'
+);
+assert.equal(
+  context.classifyDomain('myintranet.corp', { 'myintranet.corp': 'Work & Comms' }),
+  'Work & Comms'
+);
+
+// Test AI domain sort prompt
+const prompt = context.generateAISortPrompt(['news.ycombinator.com', 'internal.dev'], ['Development', 'General']);
+assert.ok(prompt.includes('news.ycombinator.com'), 'Prompt should include domain');
+assert.ok(prompt.includes('STRICT CONSTRAINTS'), 'Prompt should have strict constraints');
+console.log('  PASS: classifyDomain covers default, manual overrides, and AI sort prompt generation');
 
 // Test aggregation with cross-hour slicing
 const today = new Date();

@@ -12,7 +12,7 @@
     <div class="brand">
       <div class="logo-dot"></div>
       <span class="brand-title">ACTLog</span>
-      <span class="brand-badge">Tracker</span>
+      <span class="brand-badge">v0.0.2</span>
     </div>
     <!-- Date Switcher -->
     <div class="date-navigator">
@@ -102,6 +102,17 @@
 
     <!-- View 2: Categories & Drilldown -->
     <div class="view-panel hidden" id="view-categories">
+      <!-- Add Custom Category -->
+      <section class="card category-create-card">
+        <div class="section-header">
+          <span class="section-title">Add Category (Free)</span>
+        </div>
+        <div class="category-add-row">
+          <input type="text" id="input-new-cat" class="cat-input" placeholder="e.g. Finance, Games..." maxlength="20">
+          <button class="btn-action" id="btn-add-cat">+ Add</button>
+        </div>
+      </section>
+
       <!-- Category Distribution Cards -->
       <section class="card section-card">
         <div class="section-header">
@@ -112,15 +123,28 @@
         </div>
       </section>
 
-      <!-- Domain Breakdown Accordion -->
+      <!-- Domain Breakdown Accordion with Category Assigner -->
       <section class="card section-card">
         <div class="section-header">
-          <span class="section-title">Domain Drilldown</span>
-          <span class="section-subtext">Click domain to view pages</span>
+          <span class="section-title">Domain Drilldown & Override</span>
+          <span class="section-subtext">Click domain to view pages or assign category</span>
         </div>
         <div class="drilldown-list" id="drilldown-domain-list">
           <div class="empty-state">No domain logs available</div>
         </div>
+      </section>
+
+      <!-- AI Domain Auto-Sort Prompt (Pro Preview) -->
+      <section class="card section-card ai-sort-card">
+        <div class="section-header">
+          <div class="ai-title-wrap">
+            <span class="ai-tag">PRO PROMPT</span>
+            <span class="section-title">AI Auto-Sort Prompt</span>
+          </div>
+          <button class="btn-action btn-sm" id="btn-copy-sort-prompt">Copy Prompt</button>
+        </div>
+        <p class="ai-desc">Strict LLM prompt with your active domains to paste into Gemini / Claude:</p>
+        <pre class="ai-prompt-preview ai-sort-preview" id="ai-sort-preview">Generating prompt...</pre>
       </section>
     </div>
 
