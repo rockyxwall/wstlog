@@ -284,7 +284,7 @@ function renderCategories(stats) {
 
       return `
         <div class="drilldown-item">
-          <div class="drilldown-header" onclick="this.parentElement.classList.toggle('open')">
+          <div class="drilldown-header">
             <div class="drilldown-title-wrap">
               <span class="caret-icon">&#9654;</span>
               <span class="domain-item-name" title="${d.domain}">${d.domain}</span>
@@ -302,6 +302,14 @@ function renderCategories(stats) {
     }).join('');
   }
 }
+
+// Drilldown accordion click delegation
+drilldownDomainList.addEventListener('click', (e) => {
+  const header = e.target.closest('.drilldown-header');
+  if (header && header.parentElement) {
+    header.parentElement.classList.toggle('open');
+  }
+});
 
 function renderAIDigest(stats) {
   const digest = generateAIDigest(stats);

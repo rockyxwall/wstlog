@@ -96,12 +96,31 @@ assert.ok(digest.promptText.includes('github.com'), 'Prompt should list top doma
 console.log('  PASS: generateAIDigest produces expected LLM prompt format');
 
 // 3. Script syntax validation
-console.log('\n[3/3] Validating all scripts syntax...');
+console.log('\n[3/4] Validating all scripts syntax...');
 const scripts = ['extension/background.js', 'extension/digest.js', 'extension/popup.js'];
 for (const file of scripts) {
   const code = fs.readFileSync(file, 'utf8');
   assert.doesNotThrow(() => new vm.Script(code), `Syntax error in ${file}`);
   console.log(`  PASS: ${file} parsed successfully`);
+}
+
+// 4. Content Security Policy (CSP) Check
+console.log('\n[4/4] Verifying CSP compliance (no inline on* event handlers)...');
+const allExtensionFiles = [
+  'extension/popup.html',
+  'extension/popup.js',
+  'extension/background.js',
+  'extension/digest.js'
+];
+const inlineHandlerRegex = /\son\w+\s*=/i;
+for (const file of allExtensionFiles) {
+  const content = fs.readFileSync(file, 'utf8');
+  assert.equal(
+    inlineHandlerRegex.test(content),
+    false,
+    `CSP violation: inline event handler found in ${file}`
+  );
+  console.log(`  PASS: ${file} contains 0 inline event handlers`);
 }
 
 console.log('\nAll ACTLog Extension tests passed cleanly!\n');
