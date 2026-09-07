@@ -120,23 +120,6 @@ body {
   text-align: center;
 }
 
-/* Error Banner for Debugging */
-.error-banner {
-  background: rgba(127, 29, 29, 0.95);
-  color: #fecaca;
-  padding: 6px 10px;
-  font-size: 10px;
-  font-family: var(--font-mono);
-  border-bottom: 1px solid #ef4444;
-  word-break: break-all;
-  flex-shrink: 0;
-  cursor: pointer;
-}
-
-.error-banner.hidden {
-  display: none;
-}
-
 /* Nav Tabs */
 .nav-tabs {
   display: flex;
