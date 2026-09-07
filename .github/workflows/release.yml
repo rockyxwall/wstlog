@@ -9,7 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  release-desktop:
+    name: Build Desktop Release
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,9 +24,31 @@ jobs:
         run: |
           "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\actlog.iss
 
-      - name: Upload artifacts to release
+      - name: Upload Desktop Artifacts to Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             target/release/actlog.exe
             dist/actlog-*-installer.exe
+
+  release-extension:
+    name: Package Extension Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run Extension Tests
+        run: node tests/extension_test.mjs
+
+      - name: Package Extension Zip
+        run: |
+          cd extension
+          zip -r ../actlog-extension-${{ github.ref_name }}.zip .
+
+      - name: Upload Extension to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: actlog-extension-${{ github.ref_name }}.zip

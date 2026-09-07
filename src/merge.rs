@@ -68,3 +68,99 @@ pub fn record_session(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn setup_test_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE sessions (
+                id TEXT PRIMARY KEY,
+                app TEXT NOT NULL,
+                title TEXT NOT NULL,
+                start_utc INTEGER NOT NULL,
+                end_utc INTEGER NOT NULL,
+                source TEXT NOT NULL,
+                device_id TEXT NOT NULL
+            );",
+            [],
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn test_record_first_session() {
+        let conn = setup_test_db();
+        record_session(&conn, "dev-1", "Code.exe", "main.rs", "foreground", 1000).unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+
+        let (start, end): (i64, i64) = conn
+            .query_row(
+                "SELECT start_utc, end_utc FROM sessions WHERE app = 'Code.exe'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(start, 1000);
+        assert_eq!(end, 1000);
+    }
+
+    #[test]
+    fn test_merge_heartbeat_within_gap() {
+        let conn = setup_test_db();
+        record_session(&conn, "dev-1", "Code.exe", "main.rs", "foreground", 1000).unwrap();
+        // 3 seconds later: same app and title
+        record_session(&conn, "dev-1", "Code.exe", "main.rs", "foreground", 4000).unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1, "Should merge into existing session");
+
+        let (start, end): (i64, i64) = conn
+            .query_row(
+                "SELECT start_utc, end_utc FROM sessions WHERE app = 'Code.exe'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(start, 1000);
+        assert_eq!(end, 4000);
+    }
+
+    #[test]
+    fn test_split_session_on_gap_exceeded() {
+        let conn = setup_test_db();
+        record_session(&conn, "dev-1", "Code.exe", "main.rs", "foreground", 1000).unwrap();
+        // 15 seconds later (> 9000ms gap)
+        record_session(&conn, "dev-1", "Code.exe", "main.rs", "foreground", 16000).unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(
+            count, 2,
+            "Should create new session after gap exceeds limit"
+        );
+    }
+
+    #[test]
+    fn test_split_session_on_app_change() {
+        let conn = setup_test_db();
+        record_session(&conn, "dev-1", "Code.exe", "main.rs", "foreground", 1000).unwrap();
+        record_session(&conn, "dev-1", "chrome.exe", "Google", "foreground", 2000).unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 2, "Should create separate session for different app");
+    }
+}

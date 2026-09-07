@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -15,7 +15,8 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
-  lint:
+  rust-lint:
+    name: Rust Lint
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +27,17 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets --locked -- -D warnings
 
-  build:
+  rust-test:
+    name: Rust Unit Tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --locked
+
+  rust-build:
+    name: Rust Build
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,10 +45,29 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --locked
 
-  test:
-    runs-on: windows-latest
+  extension-test:
+    name: Extension Validation & Tests
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --locked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tests/extension_test.mjs
+
+  extension-package:
+    name: Extension Package Artifact
+    needs: extension-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create extension zip
+        run: |
+          cd extension
+          zip -r ../actlog-extension.zip .
+      - name: Upload Extension Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: actlog-extension
+          path: actlog-extension.zip
+          retention-days: 7
