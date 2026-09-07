@@ -44,12 +44,10 @@ const btnPrevDay = document.getElementById('btn-prev-day');
 const btnNextDay = document.getElementById('btn-next-day');
 const currentDateLabel = document.getElementById('current-date-label');
 
-// Overview Elements
-const currentBadge = document.getElementById('current-badge');
-const currentDomain = document.getElementById('current-domain');
-const currentTitle = document.getElementById('current-title');
-const currentTimer = document.getElementById('current-timer');
-const audioBadge = document.getElementById('audio-badge');
+// Focus Summary Hero Elements
+const focusHighlightBadge = document.getElementById('focus-highlight-badge');
+const heroPeakHour = document.getElementById('hero-peak-hour');
+const heroTopSite = document.getElementById('hero-top-site');
 
 const metricActiveTime = document.getElementById('metric-active-time');
 const metricIdleTime = document.getElementById('metric-idle-time');
@@ -228,27 +226,39 @@ function renderAllViews() {
 }
 
 function renderOverview(stats) {
-  // 1. Current Active Card
-  if (currentActive && currentActive.start_utc) {
-    currentDomain.textContent = currentActive.domain;
-    currentTitle.textContent = currentActive.title || currentActive.url;
-    currentBadge.textContent = getDomainAbbr(currentActive.domain);
-    audioBadge.classList.toggle('hidden', !currentActive.is_audible);
-  } else {
-    currentDomain.textContent = 'Browser Idle';
-    currentTitle.textContent = 'No active page focused';
-    currentBadge.textContent = 'ID';
-    audioBadge.classList.add('hidden');
-    currentTimer.textContent = '00:00:00';
-  }
-
-  // 2. Metrics
+  // 1. Focus Metrics
   metricActiveTime.textContent = formatDuration(stats.totalActiveMs);
   metricIdleTime.textContent = formatDuration(stats.totalIdleMs);
 
   const totalTracked = stats.totalActiveMs + stats.totalIdleMs;
   const focusPct = totalTracked > 0 ? Math.round((stats.totalActiveMs / totalTracked) * 100) : 100;
   metricFocusScore.textContent = `${focusPct}%`;
+
+  // 2. Peak Hour & Top Highlights
+  let peakHour = -1;
+  let maxHourActive = 0;
+  for (const b of stats.hourlyBuckets) {
+    if (b.activeMs > maxHourActive) {
+      maxHourActive = b.activeMs;
+      peakHour = b.hour;
+    }
+  }
+
+  if (peakHour >= 0 && maxHourActive > 0) {
+    const nextHour = (peakHour + 1) % 24;
+    heroPeakHour.textContent = `⚡ Peak: ${peakHour.toString().padStart(2, '0')}:00–${nextHour.toString().padStart(2, '0')}:00 (${formatDuration(maxHourActive)})`;
+  } else {
+    heroPeakHour.textContent = '⚡ Peak: No activity yet';
+  }
+
+  if (stats.sortedDomains.length > 0) {
+    const topD = stats.sortedDomains[0];
+    heroTopSite.textContent = `🌐 Top: ${topD.domain} (${formatDuration(topD.durationMs)})`;
+    focusHighlightBadge.textContent = `${focusPct}% Focus`;
+  } else {
+    heroTopSite.textContent = '🌐 Top: No sites logged';
+    focusHighlightBadge.textContent = 'Rest Day';
+  }
 
   // 3. 24-Hour Timeline Bar
   timelineContainer.innerHTML = stats.hourlyBuckets.map(b => {
@@ -447,15 +457,6 @@ drilldownDomainList.addEventListener('click', (e) => {
   }
 });
 
-function updateTicker() {
-  if (currentActive && currentActive.start_utc) {
-    const elapsed = Math.max(0, Date.now() - currentActive.start_utc);
-    currentTimer.textContent = formatTickerTime(elapsed);
-  } else {
-    currentTimer.textContent = '00:00:00';
-  }
-}
-
 // Export JSON
 btnExportJson.addEventListener('click', () => {
   if (cachedSessions.length === 0) {
@@ -495,9 +496,6 @@ window.addEventListener('DOMContentLoaded', () => {
   initVersion();
   updateDateLabel();
   loadData();
-  liveTicker = setInterval(() => {
-    updateTicker();
-  }, 1000);
 });
 
 // Reactively update when background worker records new sessions
@@ -508,7 +506,3 @@ if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
     }
   });
 }
-
-window.addEventListener('unload', () => {
-  if (liveTicker) clearInterval(liveTicker);
-});

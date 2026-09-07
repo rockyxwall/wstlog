@@ -48,41 +48,29 @@
   <main class="app-main">
     <!-- View 1: Overview -->
     <div class="view-panel" id="view-overview">
-      <!-- Active Browsing Card -->
-      <section class="card current-card">
+      <!-- Daily Focus Summary Hero -->
+      <section class="card focus-hero-card">
         <div class="card-header-mini">
-          <span class="card-label">CURRENTLY BROWSING</span>
-          <span class="live-pulse" id="live-indicator">LIVE</span>
+          <span class="card-label">FOCUS SUMMARY</span>
+          <span class="focus-badge" id="focus-highlight-badge">Tracking</span>
         </div>
-        <div class="active-app-row">
-          <div class="app-icon-badge" id="current-badge">--</div>
-          <div class="active-meta">
-            <div class="app-name-row">
-              <span class="app-name" id="current-domain">Detecting tab...</span>
-              <span class="audio-badge hidden" id="audio-badge" title="Media Playing">AUDIO</span>
-            </div>
-            <div class="window-title" id="current-title">-</div>
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <span class="metric-label">Active Time</span>
+            <span class="metric-value text-accent" id="metric-active-time">0m</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Idle / Break</span>
+            <span class="metric-value text-muted-val" id="metric-idle-time">0m</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Focus Score</span>
+            <span class="metric-value text-success" id="metric-focus-score">100%</span>
           </div>
         </div>
-        <div class="live-ticker-row">
-          <span class="ticker-label">Time on current page:</span>
-          <span class="ticker-value" id="current-timer">00:00:00</span>
-        </div>
-      </section>
-
-      <!-- Key Focus Metrics -->
-      <section class="metrics-grid">
-        <div class="metric-box">
-          <span class="metric-label">Active Time</span>
-          <span class="metric-value text-accent" id="metric-active-time">0m</span>
-        </div>
-        <div class="metric-box">
-          <span class="metric-label">Idle / AFK</span>
-          <span class="metric-value text-muted-val" id="metric-idle-time">0m</span>
-        </div>
-        <div class="metric-box">
-          <span class="metric-label">Focus Score</span>
-          <span class="metric-value text-success" id="metric-focus-score">100%</span>
+        <div class="focus-hero-footer">
+          <span class="hero-footer-item" id="hero-peak-hour">&#9889; Peak: No activity yet</span>
+          <span class="hero-footer-item" id="hero-top-site">&#127760; Top: --</span>
         </div>
       </section>
 
