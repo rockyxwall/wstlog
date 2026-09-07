@@ -1,6 +1,26 @@
 // ACTLog Standalone Activity Tracker — Popup Logic (v0.0.1)
 // Ponytail: pure vanilla JS, zero libraries, backward-compatible
 
+// Global Error Reporting: surfaces hidden extension errors directly on screen
+const errorBanner = document.getElementById('error-banner');
+function reportError(msg) {
+  if (errorBanner) {
+    errorBanner.textContent = `[Error] ${msg} (click to dismiss)`;
+    errorBanner.classList.remove('hidden');
+  }
+  console.error('[ACTLog]', msg);
+}
+if (errorBanner) {
+  errorBanner.addEventListener('click', () => errorBanner.classList.add('hidden'));
+}
+window.addEventListener('error', (e) => {
+  const file = e.filename ? e.filename.split('/').pop() : 'popup';
+  reportError(`${e.message} at ${file}:${e.lineno}`);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  reportError(`Unhandled Promise: ${e.reason?.message || e.reason}`);
+});
+
 let cachedSessions = [];
 let currentActive = null;
 let liveTicker = null;
