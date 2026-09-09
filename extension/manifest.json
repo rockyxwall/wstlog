@@ -23,7 +23,9 @@
     "unlimitedStorage"
   ],
   "host_permissions": [
-    "http://127.0.0.1:5566/*"
+    "http://127.0.0.1:5566/*",
+    "http://127.0.0.1:5567/*",
+    "http://127.0.0.1:5568/*"
   ],
   "icons": {
     "16": "icons/icon16.png",

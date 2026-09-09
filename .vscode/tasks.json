@@ -1,0 +1,46 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ACTLog: Dev Quick Restart & Verify",
+      "type": "shell",
+      "command": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$rustc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "focus": false
+      }
+    },
+    {
+      "label": "ACTLog: Launch Live Chrome with Extension",
+      "type": "shell",
+      "command": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Live",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "focus": true
+      }
+    },
+    {
+      "label": "ACTLog: Run All Tests",
+      "type": "shell",
+      "command": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": ["$rustc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "focus": false
+      }
+    }
+  ]
+}

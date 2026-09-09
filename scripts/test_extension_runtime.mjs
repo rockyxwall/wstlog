@@ -30,7 +30,8 @@ function findChrome() {
   }
 }
 
-const CHROME_PATH = process.argv[2] || findChrome();
+const customPath = process.argv.slice(2).find(arg => !arg.startsWith('-'));
+const CHROME_PATH = customPath || findChrome();
 const EXTENSION_PATH = path.resolve('extension');
 const TEMP_PROFILE = path.join(os.tmpdir(), `actlog-chrome-test-${Date.now()}`);
 const DEBUG_PORT = 9222;
@@ -52,7 +53,7 @@ async function waitForCdpReady(maxRetries = 20) {
 }
 
 async function run() {
-  console.log('=== Launching Chrome with ACTLog Extension ===');
+  console.log('=== Launching Headless Chrome with ACTLog Extension ===');
   console.log(`Extension Path: ${EXTENSION_PATH}`);
   console.log(`Temp User Profile: ${TEMP_PROFILE}`);
 
@@ -245,7 +246,7 @@ async function run() {
   }
 
   if (errors.length === 0) {
-    console.log('✅ ZERO runtime errors, ZERO CSP violations, ZERO console errors detected in live Chrome!');
+    console.log('✅ ZERO runtime errors, ZERO CSP violations, ZERO console errors detected in headless Chrome runtime!');
     process.exit(0);
   } else {
     console.error(`❌ Errors Found (${errors.length}):`);

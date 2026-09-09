@@ -218,6 +218,7 @@ async function loadData() {
     'sessions',
     'desktop_sessions',
     'desktop_daemon_active',
+    'desktop_port',
     'categories',
     'domain_mappings'
   ]);
@@ -225,13 +226,14 @@ async function loadData() {
   cachedDesktopSessions = Array.isArray(store.desktop_sessions) ? store.desktop_sessions : [];
   currentActive = store.current_active || null;
   isDaemonActive = !!store.desktop_daemon_active;
+  const currentPort = store.desktop_port || 5566;
 
   // Update daemon badge
   if (daemonStatusBadge) {
     if (isDaemonActive) {
       daemonStatusBadge.className = 'daemon-status-badge online';
       daemonStatusBadge.textContent = '🟢 Desktop';
-      daemonStatusBadge.title = 'Connected to ACTLog Windows Daemon (127.0.0.1:5566)';
+      daemonStatusBadge.title = `Connected to ACTLog Windows Daemon (127.0.0.1:${currentPort})`;
     } else {
       daemonStatusBadge.className = 'daemon-status-badge offline';
       daemonStatusBadge.textContent = '⚪ Browser';
@@ -714,7 +716,8 @@ if (btnImportJson && inputImportJson) {
         // If desktop daemon is online, forward desktop sessions to Rust SQLite
         if (isDaemonActive && merged.importedDesktopCount > 0) {
           try {
-            await fetch('http://127.0.0.1:5566/api/import', {
+            const currentPort = store.desktop_port || 5566;
+            await fetch(`http://127.0.0.1:${currentPort}/api/import`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ desktop_sessions: cachedDesktopSessions })

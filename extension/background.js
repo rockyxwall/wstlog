@@ -3,7 +3,7 @@
 
 const HEARTBEAT_ALARM = 'actlog_heartbeat_alarm';
 const DESKTOP_SYNC_ALARM = 'actlog_desktop_sync_alarm';
-const DESKTOP_API_URL = 'http://127.0.0.1:5566/api/sessions';
+const DESKTOP_PORTS = [5566, 5567, 5568];
 const MAX_DESKTOP_RETENTION_MS = 14 * 24 * 60 * 60 * 1000; // 14 days sliding window
 const MAX_DESKTOP_RECORDS = 30000;
 const IDLE_DETECTION_SECONDS = 120; // 2 minutes
@@ -336,32 +336,47 @@ chrome.idle.onStateChanged.addListener((newState) => {
   });
 });
 
-// Sync Desktop Sessions from local Rust daemon (127.0.0.1:5566)
+// Probe available desktop ports [5566, 5567, 5568]
+async function fetchDesktopFromPorts(since, preferredPort) {
+  const portsToTry = preferredPort
+    ? [preferredPort, ...DESKTOP_PORTS.filter(p => p !== preferredPort)]
+    : DESKTOP_PORTS;
+
+  for (const port of portsToTry) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch(`http://127.0.0.1:${port}/api/sessions?since=${since}`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const fetched = await res.json();
+        if (Array.isArray(fetched)) {
+          return { port, fetched };
+        }
+      }
+    } catch (_err) {
+      // try next port
+    }
+  }
+  return null;
+}
+
+// Sync Desktop Sessions from local Rust daemon (5566-5568 fallback)
 async function syncDesktopSessions() {
   try {
-    const store = await chrome.storage.local.get(['desktop_sessions', 'desktop_last_sync_utc']);
+    const store = await chrome.storage.local.get(['desktop_sessions', 'desktop_last_sync_utc', 'desktop_port']);
     const lastSync = store.desktop_last_sync_utc;
     const since = lastSync ? Math.max(0, lastSync - 60000) : (Date.now() - 86400000);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1800);
-
-    const res = await fetch(`${DESKTOP_API_URL}?since=${since}`, {
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-
-    if (!res.ok) {
+    const result = await fetchDesktopFromPorts(since, store.desktop_port);
+    if (!result) {
       await chrome.storage.local.set({ desktop_daemon_active: false });
       return;
     }
 
-    const fetched = await res.json();
-    if (!Array.isArray(fetched)) {
-      await chrome.storage.local.set({ desktop_daemon_active: false });
-      return;
-    }
-
+    const { port, fetched } = result;
     const existing = Array.isArray(store.desktop_sessions) ? store.desktop_sessions : [];
     const seen = new Set();
     for (const s of existing) {
@@ -386,7 +401,8 @@ async function syncDesktopSessions() {
     await chrome.storage.local.set({
       desktop_sessions: pruned,
       desktop_last_sync_utc: Date.now(),
-      desktop_daemon_active: true
+      desktop_daemon_active: true,
+      desktop_port: port
     });
   } catch (_err) {
     // Daemon offline or unreachable: fall back silently to standalone browser mode

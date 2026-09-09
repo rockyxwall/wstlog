@@ -186,10 +186,24 @@ fn handle_request(mut request: tiny_http::Request) -> Result<()> {
 }
 
 pub fn run_server(shutdown: Arc<AtomicBool>) -> Result<()> {
-    let server = Server::http("127.0.0.1:5566")
-        .map_err(|e| anyhow::anyhow!("Failed to start tiny_http server: {}", e))?;
+    let ports = [5566, 5567, 5568];
+    let mut server = None;
 
-    log::info!("REST API server listening on 127.0.0.1:5566");
+    for &port in &ports {
+        let addr = format!("127.0.0.1:{}", port);
+        match Server::http(&addr) {
+            Ok(s) => {
+                log::info!("REST API server listening on {}", addr);
+                server = Some(s);
+                break;
+            }
+            Err(e) => {
+                log::warn!("Port {} unavailable ({}). Trying fallback port...", port, e);
+            }
+        }
+    }
+
+    let server = server.ok_or_else(|| anyhow::anyhow!("Failed to start tiny_http server on ports 5566-5568"))?;
 
     while !shutdown.load(Ordering::Relaxed) {
         match server.try_recv() {
