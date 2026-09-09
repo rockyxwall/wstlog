@@ -128,6 +128,13 @@ console.log('  PASS: isBrowserExecutable correctly identifies browser processes'
 // Test desktop day aggregation & nested browser domain linkage
 const sampleDesktopSessions = [
   {
+    app: '<System Gap>',
+    title: '',
+    start_utc: startMs + 1 * 3600000,
+    end_utc: startMs + 5 * 3600000,
+    source: 'crash_gap'
+  },
+  {
     app: 'Code.exe',
     title: 'main.rs',
     start_utc: startMs + 9 * 3600000,
@@ -154,11 +161,13 @@ const desktopStats = context.aggregateDesktopDayStats(sampleDesktopSessions, sta
 assert.equal(desktopStats.totalDesktopActiveMs, 3 * 3600000, 'Total desktop active time must be 3h');
 assert.equal(desktopStats.totalDesktopIdleMs, 0.5 * 3600000, 'Total desktop idle time must be 30m');
 assert.equal(desktopStats.sortedApps.length, 2, 'Must have 2 non-idle apps');
+assert.equal(desktopStats.sortedApps.some(a => a.app === '<System Gap>'), false, 'System Gap must not appear in sortedApps');
+assert.equal(desktopStats.hourlyBuckets[2].activeMs, 0, 'Downtime hours must have 0 active time');
 assert.equal(desktopStats.sortedApps[0].app, 'Code.exe', 'Top app must be Code.exe');
 assert.equal(desktopStats.sortedApps[1].app, 'chrome.exe', 'Second app must be chrome.exe');
 assert.equal(desktopStats.sortedApps[1].isBrowser, true, 'chrome.exe must be flagged isBrowser');
 assert.equal(desktopStats.sortedApps[1].nestedDomains.length, 2, 'chrome.exe must link nested web domains');
-console.log('  PASS: aggregateDesktopDayStats correctly calculates PC active/idle and links nested domains');
+console.log('  PASS: aggregateDesktopDayStats correctly calculates PC active/idle, excludes system gaps, and links nested domains');
 
 // Test Unified Envelope & Legacy Import Deduplication
 const initialBrowser = [

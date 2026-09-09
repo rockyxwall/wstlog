@@ -485,53 +485,66 @@ function renderCategoryChips() {
 function renderCategories(browserStats, desktopStats) {
   const isPcScope = currentScope === 'pc' && (desktopStats.sortedApps.length > 0 || isDaemonActive);
 
-  // 1. Desktop Apps Section (Toggle visibility based on scope)
+  // Toggle sections based on active scope (PC apps vs Web categories/domains)
   if (sectionDesktopApps) {
     sectionDesktopApps.classList.toggle('hidden', !isPcScope);
-    if (isPcScope) {
-      if (desktopStats.sortedApps.length === 0) {
-        drilldownAppList.innerHTML = '<div class="empty-state">No desktop app logs recorded</div>';
-      } else {
-        drilldownAppList.innerHTML = desktopStats.sortedApps.map(app => {
-          const safeApp = escapeHtml(app.app);
-          const icon = app.isBrowser ? '🌐' : '🖥️';
-          const isExpanded = expandedDesktopApps.has(app.app);
-          const domainCount = app.nestedDomains?.length || 0;
+  }
+  if (sectionCategoriesManage) {
+    sectionCategoriesManage.classList.toggle('hidden', isPcScope);
+  }
+  if (sectionCategoryDist) {
+    sectionCategoryDist.classList.toggle('hidden', isPcScope);
+  }
+  if (sectionDomainBreakdown) {
+    sectionDomainBreakdown.classList.toggle('hidden', isPcScope);
+  }
 
-          let drawerHtml = '';
-          if (app.isBrowser && domainCount > 0) {
-            drawerHtml = `
-              <div class="nested-domains-drawer ${isExpanded ? '' : 'hidden'}">
-                ${app.nestedDomains.map(nd => `
-                  <div class="nested-domain-row">
-                    <span class="nested-domain-name" title="${escapeHtml(nd.domain)}">&bull; ${escapeHtml(nd.domain)}</span>
-                    <span class="nested-domain-time">${formatDuration(nd.durationMs)}</span>
-                  </div>
-                `).join('')}
-              </div>
-            `;
-          }
+  // 1. Desktop Apps Section (Rendered in PC Scope)
+  if (isPcScope && sectionDesktopApps) {
+    if (desktopStats.sortedApps.length === 0) {
+      drilldownAppList.innerHTML = '<div class="empty-state">No desktop app logs recorded</div>';
+    } else {
+      const totalPcMs = desktopStats.totalDesktopActiveMs;
+      drilldownAppList.innerHTML = desktopStats.sortedApps.map(app => {
+        const safeApp = escapeHtml(app.app);
+        const icon = app.isBrowser ? '🌐' : '🖥️';
+        const isExpanded = expandedDesktopApps.has(app.app);
+        const domainCount = app.nestedDomains?.length || 0;
+        const pct = totalPcMs > 0 ? Math.round((app.durationMs / totalPcMs) * 100) : 0;
 
-          return `
-            <div class="desktop-app-card">
-              <div class="desktop-app-header">
-                <div class="desktop-app-title-group">
-                  <span class="desktop-app-icon">${icon}</span>
-                  <span class="desktop-app-name" title="${safeApp}">${safeApp}</span>
+        let drawerHtml = '';
+        if (app.isBrowser && domainCount > 0) {
+          drawerHtml = `
+            <div class="nested-domains-drawer ${isExpanded ? '' : 'hidden'}">
+              ${app.nestedDomains.map(nd => `
+                <div class="nested-domain-row">
+                  <span class="nested-domain-name" title="${escapeHtml(nd.domain)}">&bull; ${escapeHtml(nd.domain)}</span>
+                  <span class="nested-domain-time">${formatDuration(nd.durationMs)}</span>
                 </div>
-                <span class="desktop-app-duration">${formatDuration(app.durationMs)}</span>
-              </div>
-              <div class="desktop-app-controls">
-                <span class="desktop-app-hint">${app.isBrowser ? 'Web Browser' : 'Windows Application'}</span>
-                ${app.isBrowser && domainCount > 0
-                  ? `<button class="btn-nested-domains" data-app="${safeApp}">${domainCount} domains ${isExpanded ? '▴' : '▾'}</button>`
-                  : ''}
-              </div>
-              ${drawerHtml}
+              `).join('')}
             </div>
           `;
-        }).join('');
-      }
+        }
+
+        return `
+          <div class="desktop-app-card">
+            <div class="desktop-app-header">
+              <div class="desktop-app-title-group">
+                <span class="desktop-app-icon">${icon}</span>
+                <span class="desktop-app-name" title="${safeApp}">${safeApp}</span>
+              </div>
+              <span class="desktop-app-duration">${formatDuration(app.durationMs)} (${pct}%)</span>
+            </div>
+            <div class="desktop-app-controls">
+              <span class="desktop-app-hint">${app.isBrowser ? 'Web Browser' : 'Windows Application'}</span>
+              ${app.isBrowser && domainCount > 0
+                ? `<button class="btn-nested-domains" data-app="${safeApp}">${domainCount} domains ${isExpanded ? '▴' : '▾'}</button>`
+                : ''}
+            </div>
+            ${drawerHtml}
+          </div>
+        `;
+      }).join('');
     }
   }
 

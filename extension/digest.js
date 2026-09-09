@@ -292,9 +292,11 @@ function aggregateDesktopDayStats(desktopSessions = [], targetDateMs, browserDay
     const clampedEnd = Math.min(sEnd, endMs);
     const clampedDuration = Math.max(0, clampedEnd - clampedStart);
 
-    if (clampedDuration <= 0) continue;
+    // Downtime: PC was off, asleep, or tracker wasn't running (skip active/idle and buckets)
+    const isDowntime = s.source === 'crash_gap' || s.app === '<System Gap>' || s.app === '<System Crash>';
+    if (isDowntime) continue;
 
-    const isIdle = s.source === 'afk' || s.app === 'idle' || s.app === 'locked' || s.app === '<System Crash>';
+    const isIdle = s.source === 'afk' || s.app === 'idle' || s.app === 'locked';
 
     if (isIdle) {
       totalDesktopIdleMs += clampedDuration;
