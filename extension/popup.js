@@ -5,6 +5,7 @@ let cachedSessions = [];
 let cachedDesktopSessions = [];
 let currentActive = null;
 let currentScope = 'pc';
+let userExplicitScope = null;
 let isDaemonActive = false;
 let liveTicker = null;
 let selectedDateMs = getMidnight(new Date());
@@ -197,6 +198,7 @@ function updateScopeButtons() {
 
 if (scopeBtnPc) {
   scopeBtnPc.addEventListener('click', () => {
+    userExplicitScope = 'pc';
     currentScope = 'pc';
     updateScopeButtons();
     renderAllViews();
@@ -205,6 +207,7 @@ if (scopeBtnPc) {
 
 if (scopeBtnBrowser) {
   scopeBtnBrowser.addEventListener('click', () => {
+    userExplicitScope = 'browser';
     currentScope = 'browser';
     updateScopeButtons();
     renderAllViews();
@@ -241,13 +244,15 @@ async function loadData() {
     }
   }
 
-  // If no desktop sessions and daemon offline, default scope to browser
-  if (cachedDesktopSessions.length === 0 && !isDaemonActive && currentScope === 'pc') {
-    currentScope = 'browser';
-    updateScopeButtons();
+  // Set scope: respect explicit user click; otherwise auto-select 'pc' when daemon/desktop sessions exist
+  if (userExplicitScope !== null) {
+    currentScope = userExplicitScope;
+  } else if (cachedDesktopSessions.length > 0 || isDaemonActive) {
+    currentScope = 'pc';
   } else {
-    updateScopeButtons();
+    currentScope = 'browser';
   }
+  updateScopeButtons();
 
   // Defaults CAN be deleted now; seeded on initial run only
   if (Array.isArray(store.categories) && store.categories.length > 0) {
@@ -271,10 +276,13 @@ async function loadData() {
 
   renderAllViews();
 
-  // Trigger non-blocking background sync
+  // Trigger non-blocking background sync and re-render immediately when done
   if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-    chrome.runtime.sendMessage({ type: 'TRIGGER_DESKTOP_SYNC' }, () => {
+    chrome.runtime.sendMessage({ type: 'TRIGGER_DESKTOP_SYNC' }, (res) => {
       if (chrome.runtime.lastError) { /* ignore */ }
+      if (res?.ok) {
+        loadData();
+      }
     });
   }
 }
