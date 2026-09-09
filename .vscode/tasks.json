@@ -17,17 +17,6 @@
       }
     },
     {
-      "label": "ACTLog: Launch Live Chrome with Extension",
-      "type": "shell",
-      "command": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Live",
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared",
-        "focus": true
-      }
-    },
-    {
       "label": "ACTLog: Run All Tests",
       "type": "shell",
       "command": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Test",
